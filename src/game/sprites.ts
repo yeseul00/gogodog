@@ -1,5 +1,6 @@
+import { CHARACTER_LIST } from './characters';
 import { STAGE_MAP } from './stages';
-import type { StageId } from './types';
+import type { CharacterId, StageId } from './types';
 
 export interface ProcessedSprite {
   canvas: HTMLCanvasElement;
@@ -10,24 +11,32 @@ export interface ProcessedSprite {
   heightRatio: number;
 }
 
-export interface GameSprites {
+export interface CharacterSpriteSet {
   runFrames: ProcessedSprite[];
   jump: ProcessedSprite | null;
   duck: ProcessedSprite | null;
+}
+
+export interface GameSprites {
+  characters: Record<CharacterId, CharacterSpriteSet>;
   stagePanoramas: Record<StageId, HTMLCanvasElement | null>;
   ready: boolean;
 }
 
-const SPRITE_URLS = {
-  runFrames: [
-    '/src/assets/images/pome_ref_run1_1795141530880.jpg',
-    '/src/assets/images/pome_ref_run2_1795141532998.jpg',
-    '/src/assets/images/pome_ref_run3_1795141530346.jpg',
-    '/src/assets/images/pome_ref_run4_1795141545026.jpg',
-  ],
-  jump: '/src/assets/images/pome_ref_jump_1795141532286.jpg',
-  duck: '/src/assets/images/pome_ref_duck_1795141529772.jpg',
-};
+export function createEmptyGameSprites(): GameSprites {
+  return {
+    characters: {
+      ddaengkong: { runFrames: [], jump: null, duck: null },
+      nari: { runFrames: [], jump: null, duck: null },
+    },
+    stagePanoramas: {
+      1: null,
+      2: null,
+      3: null,
+    },
+    ready: false,
+  };
+}
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -42,8 +51,13 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 
 /**
  * VFX-grade magenta chroma-keying + soft fur-edge feathering & despilling.
+ * Supports warm cream/honey fur (ddaengkong) and crisp neutral black/white fur (nari).
  */
-function processWatercolorChromaSprite(img: HTMLImageElement, maxDim = 420): ProcessedSprite | null {
+function processWatercolorChromaSprite(
+  img: HTMLImageElement,
+  neutralFur = false,
+  maxDim = 420
+): ProcessedSprite | null {
   const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
   const w = Math.max(1, Math.round(img.naturalWidth * scale));
   const h = Math.max(1, Math.round(img.naturalHeight * scale));
@@ -136,12 +150,22 @@ function processWatercolorChromaSprite(img: HTMLImageElement, maxDim = 420): Pro
       }
 
       const spill = Math.min(1, m / 88);
-      const cleanG = Math.min(255, Math.round(g + spill * 34));
-      const cleanB = Math.min(b, Math.round(cleanG * 0.9));
-      const cleanR = Math.min(255, Math.round(r * (1 - spill * 0.08) + cleanG * spill * 0.1));
-      data[o] = cleanR;
-      data[o + 1] = cleanG;
-      data[o + 2] = cleanB;
+      if (neutralFur) {
+        // Neutral grayscale despill for crisp white & black fur edges
+        const cleanG = Math.min(255, Math.round(g + spill * 26));
+        const cleanR = Math.min(r, cleanG + 6);
+        const cleanB = Math.min(b, cleanG + 6);
+        data[o] = cleanR;
+        data[o + 1] = cleanG;
+        data[o + 2] = cleanB;
+      } else {
+        const cleanG = Math.min(255, Math.round(g + spill * 34));
+        const cleanB = Math.min(b, Math.round(cleanG * 0.9));
+        const cleanR = Math.min(255, Math.round(r * (1 - spill * 0.08) + cleanG * spill * 0.1));
+        data[o] = cleanR;
+        data[o + 1] = cleanG;
+        data[o + 2] = cleanB;
+      }
     }
   }
 
@@ -210,42 +234,63 @@ function buildSeamlessPanorama(img: HTMLImageElement): HTMLCanvasElement | null 
   return tile;
 }
 
-export async function loadGameSprites(): Promise<GameSprites> {
-  const result: GameSprites = {
+async function loadCharacterSprites(
+  runUrls: string[],
+  jumpUrl: string,
+  duckUrl: string,
+  neutralFur: boolean
+): Promise<CharacterSpriteSet> {
+  const set: CharacterSpriteSet = {
     runFrames: [],
     jump: null,
     duck: null,
-    stagePanoramas: {
-      1: null,
-      2: null,
-      3: null,
-    },
-    ready: false,
   };
 
-  const stageIds: StageId[] = [1, 2, 3];
-
-  const [runResults, jumpRes, duckRes, panoResults] = await Promise.all([
-    Promise.allSettled(SPRITE_URLS.runFrames.map((url) => loadImage(url))),
-    Promise.allSettled([loadImage(SPRITE_URLS.jump)]).then((r) => r[0]),
-    Promise.allSettled([loadImage(SPRITE_URLS.duck)]).then((r) => r[0]),
-    Promise.allSettled(stageIds.map((id) => loadImage(STAGE_MAP[id].panoramaUrl))),
+  const [runResults, jumpRes, duckRes] = await Promise.all([
+    Promise.allSettled(runUrls.map((url) => loadImage(url))),
+    Promise.allSettled([loadImage(jumpUrl)]).then((r) => r[0]),
+    Promise.allSettled([loadImage(duckUrl)]).then((r) => r[0]),
   ]);
 
   for (const r of runResults) {
     if (r.status === 'fulfilled') {
-      const processed = processWatercolorChromaSprite(r.value);
+      const processed = processWatercolorChromaSprite(r.value, neutralFur);
       if (processed) {
-        result.runFrames.push(processed);
+        set.runFrames.push(processed);
       }
     }
   }
 
   if (jumpRes.status === 'fulfilled') {
-    result.jump = processWatercolorChromaSprite(jumpRes.value);
+    set.jump = processWatercolorChromaSprite(jumpRes.value, neutralFur);
   }
   if (duckRes.status === 'fulfilled') {
-    result.duck = processWatercolorChromaSprite(duckRes.value);
+    set.duck = processWatercolorChromaSprite(duckRes.value, neutralFur);
+  }
+
+  return set;
+}
+
+export async function loadGameSprites(): Promise<GameSprites> {
+  const result = createEmptyGameSprites();
+  const stageIds: StageId[] = [1, 2, 3];
+
+  const [characterSets, panoResults] = await Promise.all([
+    Promise.all(
+      CHARACTER_LIST.map((charDef) =>
+        loadCharacterSprites(
+          charDef.spriteUrls.runFrames,
+          charDef.spriteUrls.jump,
+          charDef.spriteUrls.duck,
+          charDef.spriteUrls.neutralFur
+        ).then((set) => ({ id: charDef.id, set }))
+      )
+    ),
+    Promise.allSettled(stageIds.map((id) => loadImage(STAGE_MAP[id].panoramaUrl))),
+  ]);
+
+  for (const { id, set } of characterSets) {
+    result.characters[id] = set;
   }
 
   panoResults.forEach((res, idx) => {
@@ -256,7 +301,9 @@ export async function loadGameSprites(): Promise<GameSprites> {
   });
 
   result.ready =
-    result.runFrames.length > 0 ||
+    result.characters.ddaengkong.runFrames.length > 0 ||
+    result.characters.nari.runFrames.length > 0 ||
     Boolean(result.stagePanoramas[1] || result.stagePanoramas[2] || result.stagePanoramas[3]);
+
   return result;
 }

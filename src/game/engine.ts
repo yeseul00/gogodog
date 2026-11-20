@@ -1,10 +1,12 @@
 import { SoundEngine } from './audio';
+import { DEFAULT_CHARACTER_ID, getCharacterDefinition } from './characters';
 import { getMemoryDefinition, getStageMemories } from './memories';
 import { WatercolorRenderer } from './renderer';
-import { loadGameSprites, type GameSprites } from './sprites';
+import { createEmptyGameSprites, loadGameSprites, type GameSprites } from './sprites';
 import { getStageDefinition, type WeightedObstacle } from './stages';
 import type {
   ActiveMemoryItem,
+  CharacterId,
   Cloud,
   FloatingText,
   GameState,
@@ -67,17 +69,7 @@ export class PomeWalkEngine {
   private renderer: WatercolorRenderer;
   private sound: SoundEngine;
   private callbacks: EngineCallbacks;
-  private sprites: GameSprites = {
-    runFrames: [],
-    jump: null,
-    duck: null,
-    stagePanoramas: {
-      1: null,
-      2: null,
-      3: null,
-    },
-    ready: false,
-  };
+  private sprites: GameSprites = createEmptyGameSprites();
 
   private rafId: number | null = null;
   private lastTimestamp = 0;
@@ -102,6 +94,7 @@ export class PomeWalkEngine {
   private isFever = false;
   private feverRemaining = 0;
   private stageId: StageId = 1;
+  private characterId: CharacterId = DEFAULT_CHARACTER_ID;
   private speed = getStageDefinition(1).baseSpeed;
 
   private shakeTimer = 0;
@@ -135,7 +128,8 @@ export class PomeWalkEngine {
     callbacks: EngineCallbacks,
     initialBestScore: number,
     initialBestDistance: number,
-    initialStage: StageId = 1
+    initialStage: StageId = 1,
+    initialCharacter: CharacterId = DEFAULT_CHARACTER_ID
   ) {
     this.canvas = canvas;
     const context = canvas.getContext('2d');
@@ -149,6 +143,7 @@ export class PomeWalkEngine {
     this.bestScore = initialBestScore;
     this.bestDistance = initialBestDistance;
     this.stageId = initialStage;
+    this.characterId = initialCharacter;
     this.speed = getStageDefinition(initialStage).baseSpeed;
 
     this.player = this.createInitialPlayer();
@@ -159,6 +154,10 @@ export class PomeWalkEngine {
     void loadGameSprites().then((loaded) => {
       this.sprites = loaded;
     });
+  }
+
+  public setCharacter(characterId: CharacterId): void {
+    this.characterId = characterId;
   }
 
   public setStage(stageId: StageId): void {
@@ -321,8 +320,9 @@ export class PomeWalkEngine {
     const canJump = this.player.isGrounded || this.player.coyoteTimer > 0;
     if (!canJump) return;
 
+    const { traits } = getCharacterDefinition(this.characterId);
     this.duckHeld = false;
-    this.player.vy = JUMP_VELOCITY;
+    this.player.vy = JUMP_VELOCITY * traits.jumpMult;
     this.player.isGrounded = false;
     this.player.isDucking = false;
     this.player.coyoteTimer = 0;
@@ -409,8 +409,9 @@ export class PomeWalkEngine {
     }
 
     if (this.isFever) {
+      const feverDuration = getCharacterDefinition(this.characterId).traits.feverDuration || FEVER_DURATION;
       this.feverRemaining -= dt;
-      this.feverGauge = Math.max(0, (this.feverRemaining / FEVER_DURATION) * 100);
+      this.feverGauge = Math.max(0, (this.feverRemaining / feverDuration) * 100);
       if (Math.random() < dt * 26) {
         const feverColors = ['#F9CF5A', '#F6A578', '#F6A4B8', '#9BD3BA'];
         this.particles.push({
@@ -965,7 +966,8 @@ export class PomeWalkEngine {
     const p = this.player;
     const pCenterX = p.x + 4;
     const pCenterY = p.y + (p.isDucking && p.isGrounded ? 16 : 26);
-    const collectRadius = this.isFever ? 40 : 30;
+    const { collectRadiusMult } = getCharacterDefinition(this.characterId).traits;
+    const collectRadius = (this.isFever ? 40 : 30) * collectRadiusMult;
 
     for (let i = this.treats.length - 1; i >= 0; i--) {
       const t = this.treats[i];
@@ -1048,8 +1050,9 @@ export class PomeWalkEngine {
     }
 
     if (!this.isFever) {
+      const { feverGainMult } = getCharacterDefinition(this.characterId).traits;
       const streakBoost = 1 + Math.min(0.6, this.combo * 0.06);
-      this.feverGauge = Math.min(100, this.feverGauge + t.feverGain * streakBoost);
+      this.feverGauge = Math.min(100, this.feverGauge + t.feverGain * streakBoost * feverGainMult);
       if (this.feverGauge >= 100) {
         this.activateFever();
       }
@@ -1062,7 +1065,8 @@ export class PomeWalkEngine {
     const p = this.player;
     const pCenterX = p.x + 4;
     const pCenterY = p.y + (p.isDucking && p.isGrounded ? 16 : 28);
-    const collectRadius = this.isFever ? 44 : 35;
+    const { collectRadiusMult } = getCharacterDefinition(this.characterId).traits;
+    const collectRadius = (this.isFever ? 44 : 35) * collectRadiusMult;
 
     for (let i = this.activeMemories.length - 1; i >= 0; i--) {
       const mem = this.activeMemories[i];
@@ -1133,8 +1137,9 @@ export class PomeWalkEngine {
   }
 
   private activateFever(): void {
+    const { feverDuration } = getCharacterDefinition(this.characterId).traits;
     this.isFever = true;
-    this.feverRemaining = FEVER_DURATION;
+    this.feverRemaining = feverDuration || FEVER_DURATION;
     this.feverGauge = 100;
     this.sound.playFeverStart();
     this.spawnSparkleBurst(this.player.x + 10, this.player.y + 30, '#F5B841', 16);
@@ -1342,6 +1347,7 @@ export class PomeWalkEngine {
 
     this.renderer.render(this.ctx, {
       stageId: this.stageId,
+      characterId: this.characterId,
       worldWidth: this.worldWidth,
       worldHeight: this.worldHeight,
       groundY: this.groundY,

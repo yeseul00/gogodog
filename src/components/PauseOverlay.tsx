@@ -1,9 +1,11 @@
 import { Home, Play, RotateCcw } from 'lucide-react';
+import { getCharacterDefinition } from '../game/characters';
 import { getStageDefinition } from '../game/stages';
-import type { StageId } from '../game/types';
+import type { CharacterId, StageId } from '../game/types';
 
 interface PauseOverlayProps {
   stageId: StageId;
+  selectedCharacter: CharacterId;
   compactLandscape?: boolean;
   onResume: () => void;
   onRestart: () => void;
@@ -12,12 +14,15 @@ interface PauseOverlayProps {
 
 export function PauseOverlay({
   stageId,
+  selectedCharacter,
   compactLandscape = false,
   onResume,
   onRestart,
   onGoTitle,
 }: PauseOverlayProps) {
   const stage = getStageDefinition(stageId);
+  const activeCharacter = getCharacterDefinition(selectedCharacter);
+  const restMessage = stage.restMessage.replace('땡콩이', activeCharacter.name);
 
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center p-3 bg-[#4A382C]/22 backdrop-blur-[3px]">
@@ -34,7 +39,7 @@ export function PauseOverlay({
         >
           잠시 쉬어가는 중
         </h2>
-        <p className="mt-1 text-xs sm:text-sm text-[#745E4E]">{stage.restMessage}</p>
+        <p className="mt-1 text-xs sm:text-sm text-[#745E4E]">{restMessage}</p>
 
         <div className={`${compactLandscape ? 'mt-3.5 gap-2' : 'mt-5 gap-2.5'} flex flex-col`}>
           <button

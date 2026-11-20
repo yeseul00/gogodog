@@ -3,6 +3,7 @@ import type { GameSprites } from './sprites';
 import { getStageDefinition } from './stages';
 import type {
   ActiveMemoryItem,
+  CharacterId,
   Cloud,
   FloatingText,
   Obstacle,
@@ -16,6 +17,7 @@ import type {
 
 export interface RenderContextState {
   stageId: StageId;
+  characterId: CharacterId;
   worldWidth: number;
   worldHeight: number;
   groundY: number;
@@ -246,8 +248,16 @@ export class WatercolorRenderer {
       }
     }
 
-    // 6. Stylized 3D Plush 땡콩이 (4-frame run + jump + duck)
-    this.drawDdaengkongSprite(ctx, state.player, groundY, state.isFever, state.elapsed, state.sprites);
+    // 6. Stylized 3D Plush Runner Character (땡콩이 or 나리 — 4-frame run + jump + duck)
+    this.drawCharacterSprite(
+      ctx,
+      state.player,
+      groundY,
+      state.isFever,
+      state.elapsed,
+      state.sprites,
+      state.characterId
+    );
 
     // 7. Stage-Specific Foreground Grass / Woodland Ferns / Evening Café Curb
     this.drawForegroundGrass(ctx, stageId, w, h, groundY, state.distance, atmo);
@@ -2060,16 +2070,17 @@ export class WatercolorRenderer {
   }
 
   /**
-   * Renders our photorealistic ultra-fluffy cream-honey 땡콩이 with 2-frame lively
-   * galloping stride alternation, jump leap pose, and flat fluffy-loaf ducking pose!
+   * Renders the selected 3D plush puppy character (땡콩이 or 나리) with 4-frame lively
+   * galloping stride alternation, jump leap pose, and low agile ducking pose!
    */
-  private drawDdaengkongSprite(
+  private drawCharacterSprite(
     ctx: CanvasRenderingContext2D,
     p: PomeranianState,
     groundY: number,
     isFever: boolean,
     elapsed: number,
-    sprites: GameSprites
+    sprites: GameSprites,
+    characterId: CharacterId
   ): void {
     const px = p.x;
     const py = groundY + 11 - p.y;
@@ -2104,17 +2115,21 @@ export class WatercolorRenderer {
     const duck = p.isDucking && p.isGrounded;
     const airborne = !p.isGrounded;
 
+    const charSprites =
+      sprites.characters[characterId]?.runFrames.length > 0
+        ? sprites.characters[characterId]
+        : sprites.characters.ddaengkong;
+
     // Smooth 4-frame cycle: [Run1 (extended) -> Run2 (gathered) -> Run3 (mid-trot) -> Run4 (landing)]
-    // Each frame also shifts the fluffy curled tail angle so it visibly wags as Ddaengkong-i trots!
-    const runCount = sprites.runFrames.length;
+    const runCount = charSprites.runFrames.length;
     const cyclePhase = (((p.runCycle / (Math.PI * 2)) % 1) + 1) % 1;
     const runIdx = runCount > 0 ? Math.floor(cyclePhase * runCount) % runCount : 0;
-    const runFrame = runCount > 0 ? sprites.runFrames[runIdx] : null;
+    const runFrame = runCount > 0 ? charSprites.runFrames[runIdx] : null;
 
     const chosenSprite = duck
-      ? sprites.duck ?? runFrame
+      ? charSprites.duck ?? runFrame
       : airborne
-        ? sprites.jump ?? runFrame
+        ? charSprites.jump ?? runFrame
         : runFrame;
 
     // Subtle organic bounce & playful tilt complementing the 4-frame stride + wagging tail
@@ -2146,7 +2161,7 @@ export class WatercolorRenderer {
         ctx.fill();
       }
     } else {
-      ctx.fillStyle = '#D99E64';
+      ctx.fillStyle = characterId === 'nari' ? '#3B3B40' : '#D99E64';
       ctx.beginPath();
       ctx.ellipse(0, duck ? -16 : -28, 26, duck ? 15 : 22, 0, 0, Math.PI * 2);
       ctx.fill();

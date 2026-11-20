@@ -70,7 +70,7 @@
     },
     "NameCounter": {
       "title": "NameCounter",
-      "description": "Monotonically incrementing counter used to assign sequential default character names (땡콩1, 땡콩2, ...).",
+      "description": "Monotonically incrementing counter used to assign sequential default character names per character (땡콩1, 땡콩2 / 나리1, 나리2).",
       "type": "object",
       "properties": {
         "count": {
@@ -93,7 +93,7 @@
     },
     "/counters/{counterId}": {
       "schema": { "$ref": "#/entities/NameCounter" },
-      "description": "Global sequential counter document (counters/defaultName) for unnamed player IDs (땡콩1, 땡콩2, ...)."
+      "description": "Global sequential counter documents (counters/defaultName for 땡콩이, counters/defaultName_nari for 나리) for unnamed player IDs."
     }
   }
 }

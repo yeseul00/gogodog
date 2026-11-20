@@ -1,13 +1,15 @@
-import { ArrowDown, ArrowUp, BookHeart, Lock, LogIn, Play, Trophy, User } from 'lucide-react';
+import { ArrowDown, ArrowUp, BookHeart, Lock, LogIn, PawPrint, Play, Trophy, User } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { getCharacterDefinition } from '../game/characters';
 import { MAX_CHARACTER_NAME_LENGTH } from '../game/ranking';
 import { getStageDefinition, STAGE_LIST } from '../game/stages';
-import type { SavedRecords, StageId } from '../game/types';
+import type { CharacterId, SavedRecords, StageId } from '../game/types';
 
 interface TitleOverlayProps {
   records: SavedRecords;
   selectedStage: StageId;
   unlockedStage: StageId;
+  selectedCharacter: CharacterId;
   characterName: string;
   collectedMemoryCount: number;
   totalMemoryCount: number;
@@ -17,18 +19,18 @@ interface TitleOverlayProps {
   compactLandscape?: boolean;
   onChangeCharacterName: (name: string) => void;
   onSelectStage: (stageId: StageId) => void;
+  onOpenCharacterSelect: () => void;
   onOpenLeaderboard: () => void;
   onOpenMemoryAlbum: () => void;
   onSignIn: () => void;
   onStart: () => void;
 }
 
-const TITLE_ART_SRC = '/src/assets/images/ddaengkong_title_main_1795150047332.jpg';
-
 export function TitleOverlay({
   records,
   selectedStage,
   unlockedStage,
+  selectedCharacter,
   characterName,
   collectedMemoryCount,
   totalMemoryCount,
@@ -38,6 +40,7 @@ export function TitleOverlay({
   compactLandscape = false,
   onChangeCharacterName,
   onSelectStage,
+  onOpenCharacterSelect,
   onOpenLeaderboard,
   onOpenMemoryAlbum,
   onSignIn,
@@ -46,10 +49,18 @@ export function TitleOverlay({
   const [imgFailed, setImgFailed] = useState(false);
   const [lockedNotice, setLockedNotice] = useState<string | null>(null);
   const activeStage = getStageDefinition(selectedStage);
+  const activeCharacter = getCharacterDefinition(selectedCharacter);
+
+  const stageSubtitle = activeStage.subtitle.replace('땡콩이', activeCharacter.name);
+  const defaultNameHint = `${activeCharacter.defaultNamePrefix}1, ${activeCharacter.defaultNamePrefix}2`;
 
   useEffect(() => {
     setLockedNotice(null);
   }, [selectedStage]);
+
+  useEffect(() => {
+    setImgFailed(false);
+  }, [selectedCharacter]);
 
   const handleStagePress = (stageId: StageId) => {
     if (stageId > unlockedStage) {
@@ -65,22 +76,40 @@ export function TitleOverlay({
     return (
       <div className="absolute inset-0 z-20 flex items-center justify-center p-2 safe-px bg-[#3A2C22]/22 backdrop-blur-[2px]">
         <div className="w-full max-w-[640px] max-h-full overflow-hidden rounded-[26px] bg-[#FFFDF9]/95 backdrop-blur-md border border-white/90 shadow-[0_16px_42px_rgba(62,44,30,0.24)] grid grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
-          {/* Left Stylized 3D Plush Ddaengkong-i Portrait */}
+          {/* Left Stylized 3D Plush Active Character Portrait */}
           <div className="relative h-full min-h-[250px] overflow-hidden bg-gradient-to-br from-[#FDE7EE] via-[#FFF3E4] to-[#E6F2DA]">
             {!imgFailed ? (
               <img
-                src={TITLE_ART_SRC}
-                alt="산책을 기대하며 귀여운 앞발을 들고 활짝 웃는 복슬복슬한 포메라니안 땡콩이"
+                src={activeCharacter.titleArtUrl}
+                alt={activeCharacter.titleArtAlt}
                 referrerPolicy="no-referrer"
                 onError={() => setImgFailed(true)}
                 className="w-full h-full object-cover object-center"
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center p-4 text-center">
-                <span className="font-display text-xl text-[#C86D3B]">{activeStage.heading}</span>
+                <span className="font-display text-xl text-[#C86D3B]">{activeCharacter.name}</span>
               </div>
             )}
             <div className="absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[#FFFDF9] via-[#FFFDF9]/45 to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-[#2E2118]/45 to-transparent pointer-events-none" />
+
+            {/* Compact Character Select Trigger over Hero */}
+            <button
+              type="button"
+              onClick={onOpenCharacterSelect}
+              aria-label={`캐릭터 선택 (현재: ${activeCharacter.name})`}
+              className="absolute bottom-2.5 left-2.5 min-h-[40px] px-3 rounded-xl bg-[#FFFDF9]/94 hover:bg-[#FFFDF9] active:scale-[0.98] backdrop-blur-md border border-white/95 shadow-[0_4px_14px_rgba(46,33,24,0.22)] text-[#4A3528] text-[11px] font-bold flex items-center gap-1.5 whitespace-nowrap cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C86D3B]"
+            >
+              <PawPrint
+                className="w-3.5 h-3.5 shrink-0"
+                style={{ color: activeCharacter.accentColor }}
+                aria-hidden="true"
+              />
+              <span>{activeCharacter.name}</span>
+              <span className="text-[#9A8574]">·</span>
+              <span style={{ color: activeCharacter.accentColor }}>캐릭터 선택</span>
+            </button>
           </div>
 
           {/* Right Name Input, Stage Selector & Start */}
@@ -90,14 +119,19 @@ export function TitleOverlay({
                 <h1 className="font-display text-[21px] leading-tight text-[#4A3528] whitespace-nowrap">
                   {activeStage.heading}
                 </h1>
-                {records.bestScore > 0 && (
-                  <p className="text-[10px] text-[#7D6858] whitespace-nowrap">
-                    내 최고{' '}
-                    <strong className="font-mono-num text-[#4A3528]">
-                      {records.bestScore.toLocaleString()}점
-                    </strong>
-                  </p>
-                )}
+                <p className="text-[10px] text-[#7D6858] truncate">
+                  <strong style={{ color: activeCharacter.accentColor }}>{activeCharacter.name}</strong>{' '}
+                  {activeCharacter.shortTraitSummary}
+                  {records.bestScore > 0 && (
+                    <>
+                      {' '}
+                      · 최고{' '}
+                      <strong className="font-mono-num text-[#4A3528]">
+                        {records.bestScore.toLocaleString()}점
+                      </strong>
+                    </>
+                  )}
+                </p>
               </div>
 
               <div className="flex items-center gap-1 shrink-0">
@@ -131,6 +165,7 @@ export function TitleOverlay({
                     className="min-h-[40px] px-2 rounded-xl bg-[#F3ECE0] hover:bg-[#EAE0D0] text-[#6E594A] text-[11px] font-bold flex items-center gap-1 whitespace-nowrap cursor-pointer"
                   >
                     <LogIn className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>{authBusy ? '...' : '로그인'}</span>
                   </button>
                 )}
               </div>
@@ -151,7 +186,7 @@ export function TitleOverlay({
                 value={characterName}
                 maxLength={MAX_CHARACTER_NAME_LENGTH}
                 onChange={(e) => onChangeCharacterName(e.target.value)}
-                placeholder="캐릭터 이름 (비우면 땡콩1, 땡콩2...)"
+                placeholder={`캐릭터 이름 (비우면 ${defaultNameHint}...)`}
                 className="w-full h-9 pl-8 pr-3 rounded-[12px] bg-[#FAF4EB] border border-[#E5D7C4] text-xs font-medium text-[#4A3528] placeholder:text-[#A39080] focus:outline-none focus:border-[#D67844] focus:bg-[#FFFDF9]"
               />
             </div>
@@ -224,19 +259,19 @@ export function TitleOverlay({
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center p-4 sm:p-6 bg-[#3A2C22]/22 backdrop-blur-[2px]">
       <div className="w-full max-w-[388px] sm:max-w-[436px] max-h-full overflow-y-auto rounded-[32px] bg-[#FFFDF9]/95 backdrop-blur-md border border-white/90 shadow-[0_20px_50px_rgba(62,44,30,0.24)]">
-        {/* Stylized 3D Plush Ddaengkong-i Hero Art */}
+        {/* Stylized 3D Plush Active Character Hero Art */}
         <div className="relative aspect-[16/9] w-full overflow-hidden bg-gradient-to-br from-[#FDE7EE] via-[#FFF3E4] to-[#E6F2DA]">
           {!imgFailed ? (
             <img
-              src={TITLE_ART_SRC}
-              alt="산책을 기대하며 귀여운 앞발을 들고 활짝 웃는 복슬복슬한 포메라니안 땡콩이"
+              src={activeCharacter.titleArtUrl}
+              alt={activeCharacter.titleArtAlt}
               referrerPolicy="no-referrer"
               onError={() => setImgFailed(true)}
               className="w-full h-full object-cover object-center"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center p-6 text-center">
-              <span className="font-display text-2xl text-[#C86D3B]">{activeStage.heading}</span>
+              <span className="font-display text-2xl text-[#C86D3B]">{activeCharacter.name}</span>
             </div>
           )}
 
@@ -278,7 +313,24 @@ export function TitleOverlay({
             </div>
           </div>
 
-          <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-[#FFFDF9] via-[#FFFDF9]/55 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-[#FFFDF9] via-[#FFFDF9]/60 to-transparent" />
+
+          {/* Bottom-right Character Selection Button over Hero */}
+          <button
+            type="button"
+            onClick={onOpenCharacterSelect}
+            aria-label={`캐릭터 선택 팝업 열기 (현재: ${activeCharacter.name})`}
+            className="absolute bottom-2.5 right-3 min-h-[40px] px-3.5 rounded-2xl bg-[#FFFDF9]/95 hover:bg-[#FFFDF9] active:scale-[0.98] backdrop-blur-md border border-[#E7DCCB] shadow-[0_4px_14px_rgba(62,44,30,0.16)] text-[#4A3528] text-xs font-bold flex items-center gap-1.5 whitespace-nowrap cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C86D3B]"
+          >
+            <PawPrint
+              className="w-3.5 h-3.5 shrink-0"
+              style={{ color: activeCharacter.accentColor }}
+              aria-hidden="true"
+            />
+            <span>캐릭터 선택</span>
+            <span className="text-[#B7A492]">·</span>
+            <span style={{ color: activeCharacter.accentColor }}>{activeCharacter.name}</span>
+          </button>
         </div>
 
         {/* Clean Content */}
@@ -287,12 +339,19 @@ export function TitleOverlay({
             {activeStage.heading}
           </h1>
           <p className="mt-1 text-xs sm:text-sm text-[#745E4E] leading-relaxed">
-            {activeStage.subtitle}
+            {stageSubtitle}
           </p>
 
-          {/* Unboxed typographic best records */}
+          {/* Unboxed active character trait & best records */}
+          <div className="mt-1.5 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-xs text-[#7D6858]">
+            <span>
+              <strong style={{ color: activeCharacter.accentColor }}>{activeCharacter.name}</strong>{' '}
+              ({activeCharacter.roleTitle}) · {activeCharacter.shortTraitSummary}
+            </span>
+          </div>
+
           {records.bestScore > 0 && (
-            <div className="mt-1.5 flex items-center justify-center gap-2 text-xs text-[#7D6858]">
+            <div className="mt-1 flex items-center justify-center gap-2 text-xs text-[#7D6858]">
               <span>
                 최고 점수{' '}
                 <strong className="font-mono-num text-[#4A3528]">
@@ -313,7 +372,10 @@ export function TitleOverlay({
               htmlFor="char-name-input"
               className="block text-[11px] font-bold text-[#7A6555] mb-1 pl-1"
             >
-              캐릭터 이름 <span className="font-normal text-[#9B8777]">(미입력 시 땡콩1, 땡콩2 자동 부여)</span>
+              캐릭터 이름{' '}
+              <span className="font-normal text-[#9B8777]">
+                (미입력 시 {defaultNameHint} 자동 부여)
+              </span>
             </label>
             <div className="relative">
               <User
@@ -326,7 +388,7 @@ export function TitleOverlay({
                 value={characterName}
                 maxLength={MAX_CHARACTER_NAME_LENGTH}
                 onChange={(e) => onChangeCharacterName(e.target.value)}
-                placeholder="예: 땡콩이, 초코 (최대 12자)"
+                placeholder={`예: ${activeCharacter.name}, 초코 (최대 12자)`}
                 className="w-full min-h-[44px] pl-10 pr-3.5 rounded-[16px] bg-[#FAF4EB] border border-[#E5D7C4] text-sm font-medium text-[#4A3528] placeholder:text-[#A39080] focus:outline-none focus:border-[#D67844] focus:bg-[#FFFDF9] transition-colors"
               />
             </div>

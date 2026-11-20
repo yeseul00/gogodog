@@ -13,8 +13,9 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
+import { DEFAULT_CHARACTER_ID, getCharacterDefinition } from './characters';
 import { isStageId } from './stages';
-import type { GameSummary, StageId, WalkOutcome } from './types';
+import type { CharacterId, GameSummary, StageId, WalkOutcome } from './types';
 
 export const MAX_CHARACTER_NAME_LENGTH = 12;
 
@@ -66,21 +67,25 @@ function makeSafeEntryId(uid: string): string {
 }
 
 /**
- * Allocates the next sequential default character name (땡콩1, 땡콩2, ...).
- * Uses an atomic Firestore transaction on counters/defaultName when signed in,
- * and falls back gracefully to a local sequential number when offline or signed out.
+ * Allocates the next sequential default character name (땡콩1, 땡콩2 / 나리1, 나리2).
+ * Uses an atomic Firestore transaction on counters/defaultName or counters/defaultName_nari when signed in,
+ * and falls back gracefully to a local per-character sequential number when offline or signed out.
  */
 export async function allocateDefaultCharacterName(
   user: User | null,
-  localNextNumber: number
+  localNextNumber: number,
+  characterId: CharacterId = DEFAULT_CHARACTER_ID
 ): Promise<{ name: string; nextLocalNumber: number; isServerAssigned: boolean }> {
+  const charDef = getCharacterDefinition(characterId);
+  const prefix = charDef.defaultNamePrefix;
+  const counterDocId = charDef.counterDocId;
   const safeLocal = Math.max(1, Math.floor(localNextNumber || 1));
 
   if (user && user.emailVerified) {
-    const counterPath = 'counters/defaultName';
+    const counterPath = `counters/${counterDocId}`;
     try {
       const assignedNum = await runTransaction(db, async (tx) => {
-        const ref = doc(db, 'counters', 'defaultName');
+        const ref = doc(db, 'counters', counterDocId);
         const snap = await tx.get(ref);
         if (!snap.exists()) {
           tx.set(ref, {
@@ -100,7 +105,7 @@ export async function allocateDefaultCharacterName(
       });
 
       return {
-        name: `땡콩${assignedNum}`,
+        name: `${prefix}${assignedNum}`,
         nextLocalNumber: Math.max(safeLocal, assignedNum + 1),
         isServerAssigned: true,
       };
@@ -114,7 +119,7 @@ export async function allocateDefaultCharacterName(
   }
 
   return {
-    name: `땡콩${safeLocal}`,
+    name: `${prefix}${safeLocal}`,
     nextLocalNumber: safeLocal + 1,
     isServerAssigned: false,
   };

@@ -1,15 +1,17 @@
 import { ArrowRight, BookHeart, Home, LogIn, RotateCcw, Sparkles, Trophy } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { getCharacterDefinition } from '../game/characters';
 import { getStageMemories } from '../game/memories';
 import type { PlayerRankSnapshot } from '../game/ranking';
 import { getNextStageId, getStageDefinition } from '../game/stages';
-import type { GameSummary, MemoryFragmentId, StageId } from '../game/types';
+import type { CharacterId, GameSummary, MemoryFragmentId, StageId } from '../game/types';
 import { MemoryIcon } from './MemoryIcon';
 
 export type RankingSubmitStatus = 'idle' | 'submitting' | 'submitted' | 'needs_auth' | 'error';
 
 interface GameOverOverlayProps {
   summary: GameSummary;
+  selectedCharacter: CharacterId;
   characterName: string;
   newlyUnlockedStage: StageId | null;
   newlyDiscoveredMemoryIds: MemoryFragmentId[];
@@ -26,11 +28,9 @@ interface GameOverOverlayProps {
   onGoTitle: () => void;
 }
 
-const HAPPY_HOME_SRC = '/src/assets/images/ddaengkong_char_happy_1795147884238.jpg';
-const SAD_HOME_SRC = '/src/assets/images/ddaengkong_char_sad_1795147884813.jpg';
-
 export function GameOverOverlay({
   summary,
+  selectedCharacter,
   characterName,
   newlyUnlockedStage,
   newlyDiscoveredMemoryIds,
@@ -51,23 +51,30 @@ export function GameOverOverlay({
   const nextStageId = isCompleted ? getNextStageId(summary.stageId) : null;
   const nextStage = nextStageId ? getStageDefinition(nextStageId) : null;
   const unlockedStageDef = newlyUnlockedStage ? getStageDefinition(newlyUnlockedStage) : null;
+  const activeCharacter = getCharacterDefinition(selectedCharacter);
   const stageMemories = getStageMemories(summary.stageId);
 
   useEffect(() => {
     setImgFailed(false);
-  }, [summary.outcome, summary.stageId]);
+  }, [summary.outcome, summary.stageId, selectedCharacter]);
 
-  const portraitSrc = isCompleted ? HAPPY_HOME_SRC : SAD_HOME_SRC;
+  const portraitSrc = isCompleted
+    ? activeCharacter.happyHomeArtUrl
+    : activeCharacter.sadHomeArtUrl;
   const portraitAlt = isCompleted
-    ? '산책을 끝까지 마치고 활짝 웃으며 신나게 집으로 돌아오는 복슬복슬한 포메라니안 땡콩이'
-    : '하트를 모두 소진해 아쉬운 표정으로 뒤돌아보며 중도 귀가하는 포메라니안 땡콩이';
+    ? activeCharacter.happyHomeArtAlt
+    : activeCharacter.sadHomeArtAlt;
+
+  const outcomeTitle = isCompleted
+    ? `${activeCharacter.name} 즐겁게 귀가!`
+    : `${activeCharacter.name} 중도 귀가`;
 
   const completionDesc =
     isCompleted && !nextStage
-      ? '3단계 저녁 카페거리까지 모든 산책 코스를 멋지게 완주했어요!'
+      ? `${activeCharacter.name}와 3단계 저녁 카페거리까지 모든 산책 코스를 멋지게 완주했어요!`
       : isCompleted
-        ? '산책을 끝까지 마치고 꼬리를 살랑이며 신나게 집에 돌아왔어요.'
-        : '아쉽지만 오늘은 여기까지! 잠깐 쉬고 다시 산책해 볼까요?';
+        ? `${activeCharacter.name}가 산책을 끝까지 마치고 꼬리를 살랑이며 무사히 집에 도착했어요.`
+        : `${activeCharacter.name}가 조금 지쳐서 중도 귀가했어요. 잠깐 쉬고 다시 산책해 볼까요?`;
 
   const rankHeadline =
     rankSnapshot.overallRank !== null && rankSnapshot.stageRank !== null
@@ -98,9 +105,7 @@ export function GameOverOverlay({
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center p-4 text-center">
-                <span className="font-display text-xl text-[#8A5434]">
-                  {isCompleted ? '땡콩이 즐겁게 귀가!' : '중도 귀가'}
-                </span>
+                <span className="font-display text-xl text-[#8A5434]">{outcomeTitle}</span>
               </div>
             )}
             <div className="absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[#FFFDF9] via-[#FFFDF9]/45 to-transparent" />
@@ -132,7 +137,7 @@ export function GameOverOverlay({
                 isCompleted ? 'text-[#B85B2A]' : 'text-[#4A3528]'
               }`}
             >
-              {isCompleted ? '땡콩이 즐겁게 귀가!' : '중도 귀가'}
+              {outcomeTitle}
             </h2>
 
             {/* Inline Ranking Status / Unlock Strip */}
@@ -305,9 +310,7 @@ export function GameOverOverlay({
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center p-6 text-center">
-              <span className="font-display text-2xl text-[#8A5434]">
-                {isCompleted ? '땡콩이 즐겁게 귀가!' : '중도 귀가'}
-              </span>
+              <span className="font-display text-2xl text-[#8A5434]">{outcomeTitle}</span>
             </div>
           )}
           <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-[#FFFDF9] via-[#FFFDF9]/55 to-transparent" />
@@ -327,7 +330,7 @@ export function GameOverOverlay({
               isCompleted ? 'text-[#B85B2A]' : 'text-[#4A3528]'
             }`}
           >
-            {isCompleted ? '땡콩이 즐겁게 귀가!' : '중도 귀가'}
+            {outcomeTitle}
           </h2>
 
           <p className="mt-1 text-xs sm:text-sm text-[#745E4E] leading-relaxed">{completionDesc}</p>

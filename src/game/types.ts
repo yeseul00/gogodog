@@ -4,6 +4,8 @@ export type WalkOutcome = 'completed' | 'early_return';
 
 export type StageId = 1 | 2 | 3;
 
+export type CharacterId = 'ddaengkong' | 'nari';
+
 export type TimeOfDayPhase = 'morning' | 'afternoon' | 'sunset' | 'evening';
 
 export type ObstacleKind =
@@ -201,7 +203,9 @@ export interface SavedRecords {
   isMuted: boolean;
   unlockedStage: StageId;
   selectedStage: StageId;
+  selectedCharacter: CharacterId;
   characterName: string;
   localDefaultCounter: number;
+  localDefaultCounters: Record<CharacterId, number>;
   collectedMemories: CollectedMemoriesMap;
 }

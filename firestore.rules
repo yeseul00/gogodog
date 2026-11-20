@@ -103,19 +103,23 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Sequential default name counter (strictly counters/defaultName, strictly +1 increments)
+    function isAllowedCounterId(counterId) {
+      return counterId == 'defaultName' || counterId == 'defaultName_nari';
+    }
+
+    // Sequential default name counters (counters/defaultName & counters/defaultName_nari, strictly +1 increments)
     match /counters/{counterId} {
-      allow get: if isVerifiedUser() && isValidId(counterId) && counterId == 'defaultName';
+      allow get: if isVerifiedUser() && isValidId(counterId) && isAllowedCounterId(counterId);
       allow list: if false;
       allow create: if isVerifiedUser()
         && isValidId(counterId)
-        && counterId == 'defaultName'
+        && isAllowedCounterId(counterId)
         && isValidNameCounter(incoming())
         && incoming().count == 1
         && incoming().updatedAt == request.time;
       allow update: if isVerifiedUser()
         && isValidId(counterId)
-        && counterId == 'defaultName'
+        && isAllowedCounterId(counterId)
         && isValidNameCounter(incoming())
         && incoming().diff(existing()).affectedKeys().hasOnly(['count', 'updatedAt'])
         && incoming().count == existing().count + 1

@@ -1,15 +1,24 @@
-import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
+import {
+  getRedirectResult,
+  onAuthStateChanged,
+  signInWithPopup,
+  signInWithRedirect,
+  signOut,
+  type User,
+} from 'firebase/auth';
+import { X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CharacterSelectModal } from './components/CharacterSelectModal';
 import { GameOverOverlay, type RankingSubmitStatus } from './components/GameOverOverlay';
 import { LeaderboardModal } from './components/LeaderboardModal';
 import { MemoryAlbumModal, type MemoryAlbumTab } from './components/MemoryAlbumModal';
 import { PauseOverlay } from './components/PauseOverlay';
-import { RotateLandscapeOverlay } from './components/RotateLandscapeOverlay';
 import { TitleOverlay } from './components/TitleOverlay';
 import { TopHud } from './components/TopHud';
 import { TouchControls } from './components/TouchControls';
 import { auth, googleProvider } from './firebase';
 import { SoundEngine } from './game/audio';
+import { getCharacterDefinition } from './game/characters';
 import { PomeWalkEngine } from './game/engine';
 import {
   getStageMemories,
@@ -29,6 +38,7 @@ import {
 import { getNextStageId, getStageDefinition } from './game/stages';
 import { loadRecords, saveRecords } from './game/storage';
 import type {
+  CharacterId,
   CollectedMemoriesMap,
   GameState,
   GameSummary,
@@ -64,9 +74,40 @@ function createInitialHud(records: SavedRecords): HudSnapshot {
   };
 }
 
+const PENDING_RANK_SUBMISSION_KEY = 'pome_walk_pending_rank_v1';
+
 function readViewportSize(): { width: number; height: number } {
   if (typeof window === 'undefined') return { width: 1024, height: 640 };
   return { width: window.innerWidth, height: window.innerHeight };
+}
+
+function isEmbeddedInAppBrowser(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  return /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\/|wv\)/i.test(ua);
+}
+
+function formatAuthErrorMessage(error: unknown): string | null {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: unknown }).code)
+      : '';
+  if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+    return null;
+  }
+  if (code === 'auth/unauthorized-domain') {
+    const host = typeof window !== 'undefined' ? window.location.hostname : '';
+    return `현재 도메인(${host})이 Firebase 승인 도메인에 등록되지 않았어요. Firebase 콘솔 > Authentication > 설정 > 승인된 도메인에 추가해 주세요.`;
+  }
+  if (code === 'auth/network-request-failed') {
+    return '네트워크 연결을 확인한 뒤 다시 로그인해 주세요.';
+  }
+  if (isEmbeddedInAppBrowser()) {
+    return '인앱 브라우저(카카오톡 등)에서는 Google 로그인이 차단될 수 있어요. Safari 또는 Chrome으로 열어 주세요.';
+  }
+  return code
+    ? `Google 로그인을 완료하지 못했어요. (${code})`
+    : 'Google 로그인을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.';
 }
 
 export default function App() {
@@ -74,12 +115,17 @@ export default function App() {
   const [gameState, setGameState] = useState<GameState>('TITLE_MENU');
   const [selectedStage, setSelectedStage] = useState<StageId>(() => loadRecords().selectedStage);
   const [unlockedStage, setUnlockedStage] = useState<StageId>(() => loadRecords().unlockedStage);
+  const [selectedCharacter, setSelectedCharacter] = useState<CharacterId>(
+    () => loadRecords().selectedCharacter
+  );
   const [characterNameInput, setCharacterNameInput] = useState<string>(
     () => loadRecords().characterName
   );
-  const [activeRunName, setActiveRunName] = useState<string>(
-    () => loadRecords().characterName || '땡콩1'
-  );
+  const [activeRunName, setActiveRunName] = useState<string>(() => {
+    const initial = loadRecords();
+    const charDef = getCharacterDefinition(initial.selectedCharacter);
+    return initial.characterName || `${charDef.defaultNamePrefix}1`;
+  });
   const [startingRun, setStartingRun] = useState<boolean>(false);
   const [newlyUnlockedStage, setNewlyUnlockedStage] = useState<StageId | null>(null);
   const [hud, setHud] = useState<HudSnapshot>(() => createInitialHud(loadRecords()));
@@ -88,11 +134,11 @@ export default function App() {
   const [viewport, setViewport] = useState<{ width: number; height: number }>(() =>
     readViewportSize()
   );
-  const [virtualLandscape, setVirtualLandscape] = useState<boolean>(false);
 
   // Online Firebase Auth & Leaderboard State
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authBusy, setAuthBusy] = useState<boolean>(false);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [rankings, setRankings] = useState<RankingEntry[]>([]);
   const [rankingsLoading, setRankingsLoading] = useState<boolean>(true);
   const [rankingsError, setRankingsError] = useState<string | null>(null);
@@ -100,7 +146,8 @@ export default function App() {
   const [leaderboardOpen, setLeaderboardOpen] = useState<boolean>(false);
   const [leaderboardTab, setLeaderboardTab] = useState<RankingTab>('all');
 
-  // Memory Album State
+  // Character Select & Memory Album Modals
+  const [characterModalOpen, setCharacterModalOpen] = useState<boolean>(false);
   const [memoryAlbumOpen, setMemoryAlbumOpen] = useState<boolean>(false);
   const [memoryAlbumTab, setMemoryAlbumTab] = useState<MemoryAlbumTab>('all');
   const [newlyDiscoveredMemoryIds, setNewlyDiscoveredMemoryIds] = useState<MemoryFragmentId[]>([]);
@@ -111,6 +158,7 @@ export default function App() {
   const soundRef = useRef<SoundEngine | null>(null);
   const gameStateRef = useRef<GameState>(gameState);
   const unlockedStageRef = useRef<StageId>(unlockedStage);
+  const selectedCharacterRef = useRef<CharacterId>(selectedCharacter);
   const authUserRef = useRef<User | null>(authUser);
   const activeRunNameRef = useRef<string>(activeRunName);
   const usedLocalFallbackNameRef = useRef<boolean>(false);
@@ -119,9 +167,9 @@ export default function App() {
   const touchStartAxisRef = useRef<number | null>(null);
   const canvasDuckPointerIdRef = useRef<number | null>(null);
 
+  // Mobile portrait automatically renders in horizontal landscape layout (no blocking rotate gate)
   const isMobilePortrait = viewport.width <= 768 && viewport.height > viewport.width;
-  const activeVirtualLandscape = isMobilePortrait && virtualLandscape;
-  const showRotatePrompt = isMobilePortrait && !virtualLandscape;
+  const activeVirtualLandscape = isMobilePortrait;
 
   const effectiveStageW = activeVirtualLandscape ? viewport.height : viewport.width;
   const effectiveStageH = activeVirtualLandscape ? viewport.width : viewport.height;
@@ -136,6 +184,10 @@ export default function App() {
   useEffect(() => {
     unlockedStageRef.current = unlockedStage;
   }, [unlockedStage]);
+
+  useEffect(() => {
+    selectedCharacterRef.current = selectedCharacter;
+  }, [selectedCharacter]);
 
   useEffect(() => {
     authUserRef.current = authUser;
@@ -177,11 +229,7 @@ export default function App() {
 
   useEffect(() => {
     const handleResize = () => {
-      const next = readViewportSize();
-      setViewport(next);
-      if (next.width >= next.height) {
-        setVirtualLandscape(false);
-      }
+      setViewport(readViewportSize());
     };
     window.addEventListener('resize', handleResize);
     window.addEventListener('orientationchange', handleResize);
@@ -190,14 +238,6 @@ export default function App() {
       window.removeEventListener('orientationchange', handleResize);
     };
   }, []);
-
-  // Auto-pause if a mobile user rotates back into portrait mid-run
-  useEffect(() => {
-    if (showRotatePrompt && gameStateRef.current === 'PLAYING') {
-      engineRef.current?.setState('PAUSED');
-      setGameState('PAUSED');
-    }
-  }, [showRotatePrompt]);
 
   // Trigger engine resize whenever stage geometry changes (including virtual landscape switch)
   useEffect(() => {
@@ -212,22 +252,26 @@ export default function App() {
       setRankingSubmitStatus('submitting');
       try {
         let finalName = sanitizeCharacterName(runName);
-        // If a default name was assigned locally before login, allocate a server-sequential 땡콩N now!
+        const charId = selectedCharacterRef.current;
+        // If a default name was assigned locally before login, allocate a server-sequential default name now!
         if (!finalName || usedLocalFallbackNameRef.current) {
-          const allocated = await allocateDefaultCharacterName(
-            user,
-            recordsRef.current.localDefaultCounter
-          );
+          const localSeq = recordsRef.current.localDefaultCounters?.[charId] ?? 1;
+          const allocated = await allocateDefaultCharacterName(user, localSeq, charId);
           finalName = allocated.name;
           usedLocalFallbackNameRef.current = false;
           setCharacterNameInput(finalName);
           setActiveRunName(finalName);
           activeRunNameRef.current = finalName;
           setRecords((prev) => {
+            const nextCounters = {
+              ...prev.localDefaultCounters,
+              [charId]: allocated.nextLocalNumber,
+            };
             const updated: SavedRecords = {
               ...prev,
               characterName: finalName,
-              localDefaultCounter: allocated.nextLocalNumber,
+              localDefaultCounter: nextCounters.ddaengkong,
+              localDefaultCounters: nextCounters,
             };
             saveRecords(updated);
             return updated;
@@ -315,7 +359,8 @@ export default function App() {
       },
       initial.bestScore,
       initial.bestDistance,
-      initial.selectedStage
+      initial.selectedStage,
+      initial.selectedCharacter
     );
 
     engineRef.current = engine;
@@ -344,28 +389,43 @@ export default function App() {
     };
   }, [submitScoreToOnlineBoard]);
 
-  const handleEnterLandscape = useCallback(async () => {
-    soundRef.current?.unlock();
-    soundRef.current?.playClick();
-
-    try {
-      const rootEl = document.documentElement;
-      if (rootEl.requestFullscreen && !document.fullscreenElement) {
-        await rootEl.requestFullscreen();
-      }
-      const orientation = screen.orientation as ScreenOrientation & {
-        lock?: (type: string) => Promise<void>;
-      };
-      if (orientation && typeof orientation.lock === 'function') {
-        await orientation.lock('landscape');
-        return;
-      }
-    } catch {
-      // Fallback cleanly to full-screen 90-degree landscape viewport (iOS Safari / iframes)
-    }
-
-    setVirtualLandscape(true);
-  }, []);
+  // Handle mobile redirect sign-in return (when popup was blocked by mobile browser)
+  useEffect(() => {
+    let active = true;
+    void getRedirectResult(auth)
+      .then(async (cred) => {
+        if (!active || !cred?.user) return;
+        setAuthUser(cred.user);
+        authUserRef.current = cred.user;
+        try {
+          const rawPending = window.sessionStorage.getItem(PENDING_RANK_SUBMISSION_KEY);
+          if (rawPending) {
+            window.sessionStorage.removeItem(PENDING_RANK_SUBMISSION_KEY);
+            const pending = JSON.parse(rawPending) as {
+              runName: string;
+              runSummary: GameSummary;
+            };
+            if (cred.user.emailVerified && pending?.runSummary) {
+              setActiveRunName(pending.runName);
+              activeRunNameRef.current = pending.runName;
+              setSummary(pending.runSummary);
+              setGameState('GAME_OVER');
+              await submitScoreToOnlineBoard(cred.user, pending.runName, pending.runSummary);
+            }
+          }
+        } catch {
+          // Ignore malformed pending submission
+        }
+      })
+      .catch((error) => {
+        if (!active) return;
+        const msg = formatAuthErrorMessage(error);
+        if (msg) setAuthNotice(msg);
+      });
+    return () => {
+      active = false;
+    };
+  }, [submitScoreToOnlineBoard]);
 
   const handleChangeCharacterName = useCallback((raw: string) => {
     const sliced = raw.slice(0, MAX_CHARACTER_NAME_LENGTH);
@@ -388,19 +448,27 @@ export default function App() {
       return cleaned;
     }
 
+    const charId = selectedCharacterRef.current;
+    const localSeq = recordsRef.current.localDefaultCounters?.[charId] ?? 1;
     const allocated = await allocateDefaultCharacterName(
       authUserRef.current,
-      recordsRef.current.localDefaultCounter
+      localSeq,
+      charId
     );
     usedLocalFallbackNameRef.current = !allocated.isServerAssigned;
     setCharacterNameInput(allocated.name);
     setActiveRunName(allocated.name);
     activeRunNameRef.current = allocated.name;
     setRecords((prev) => {
+      const nextCounters = {
+        ...prev.localDefaultCounters,
+        [charId]: allocated.nextLocalNumber,
+      };
       const updated: SavedRecords = {
         ...prev,
         characterName: allocated.name,
-        localDefaultCounter: allocated.nextLocalNumber,
+        localDefaultCounter: nextCounters.ddaengkong,
+        localDefaultCounters: nextCounters,
       };
       saveRecords(updated);
       return updated;
@@ -408,22 +476,62 @@ export default function App() {
     return allocated.name;
   }, [characterNameInput]);
 
-  const handleSignIn = useCallback(async (): Promise<User | null> => {
-    soundRef.current?.unlock();
-    soundRef.current?.playClick();
-    setAuthBusy(true);
-    try {
-      const cred = await signInWithPopup(auth, googleProvider);
-      setAuthUser(cred.user);
-      authUserRef.current = cred.user;
-      return cred.user;
-    } catch (error) {
-      console.error('Google Sign-In failed:', error);
-      return null;
-    } finally {
-      setAuthBusy(false);
-    }
-  }, []);
+  const handleSignIn = useCallback(
+    async (pendingRun?: { runName: string; runSummary: GameSummary }): Promise<User | null> => {
+      soundRef.current?.unlock();
+      soundRef.current?.playClick();
+      setAuthNotice(null);
+
+      if (isEmbeddedInAppBrowser()) {
+        setAuthNotice(
+          '카카오톡·인스타 등 인앱 브라우저에서는 Google 로그인이 차단될 수 있어요. Safari 또는 Chrome에서 열어 주세요.'
+        );
+      }
+
+      setAuthBusy(true);
+      try {
+        const cred = await signInWithPopup(auth, googleProvider);
+        setAuthUser(cred.user);
+        authUserRef.current = cred.user;
+        setAuthNotice(null);
+        return cred.user;
+      } catch (error) {
+        const code =
+          typeof error === 'object' && error !== null && 'code' in error
+            ? String((error as { code?: unknown }).code)
+            : '';
+
+        // Graceful redirect fallback when a mobile browser blocks OAuth popups
+        if (
+          code === 'auth/popup-blocked' ||
+          code === 'auth/operation-not-supported-in-this-environment'
+        ) {
+          try {
+            if (pendingRun) {
+              window.sessionStorage.setItem(
+                PENDING_RANK_SUBMISSION_KEY,
+                JSON.stringify(pendingRun)
+              );
+            }
+            await signInWithRedirect(auth, googleProvider);
+            return null;
+          } catch (redirectErr) {
+            const msg = formatAuthErrorMessage(redirectErr);
+            if (msg) setAuthNotice(msg);
+            return null;
+          }
+        }
+
+        console.error('Google Sign-In failed:', error);
+        const msg = formatAuthErrorMessage(error);
+        if (msg) setAuthNotice(msg);
+        return null;
+      } finally {
+        setAuthBusy(false);
+      }
+    },
+    []
+  );
 
   const handleSignOut = useCallback(async () => {
     soundRef.current?.playClick();
@@ -438,7 +546,10 @@ export default function App() {
   }, []);
 
   const handleSignInAndSubmit = useCallback(async () => {
-    const signedInUser = await handleSignIn();
+    const pending = summary
+      ? { runName: activeRunNameRef.current, runSummary: summary }
+      : undefined;
+    const signedInUser = await handleSignIn(pending);
     if (signedInUser && signedInUser.emailVerified && summary) {
       await submitScoreToOnlineBoard(signedInUser, activeRunNameRef.current, summary);
     }
@@ -464,6 +575,45 @@ export default function App() {
     });
   }, []);
 
+  const handleSelectCharacter = useCallback((characterId: CharacterId) => {
+    soundRef.current?.unlock();
+    soundRef.current?.playClick();
+    const prevCharacter = selectedCharacterRef.current;
+    setSelectedCharacter(characterId);
+    selectedCharacterRef.current = characterId;
+    engineRef.current?.setCharacter(characterId);
+
+    // If the input currently holds an auto-generated default name from the other character (e.g. 땡콩1),
+    // clear it so starting with the newly selected character cleanly issues its own prefix (e.g. 나리1).
+    const otherPrefix = getCharacterDefinition(prevCharacter).defaultNamePrefix;
+    const isOtherAutoDefault =
+      prevCharacter !== characterId &&
+      new RegExp(`^${otherPrefix}\\d+$`).test(sanitizeCharacterName(recordsRef.current.characterName));
+
+    if (isOtherAutoDefault) {
+      setCharacterNameInput('');
+      usedLocalFallbackNameRef.current = false;
+    }
+
+    setRecords((rec) => {
+      const updated: SavedRecords = {
+        ...rec,
+        selectedCharacter: characterId,
+        characterName: isOtherAutoDefault ? '' : rec.characterName,
+      };
+      saveRecords(updated);
+      return updated;
+    });
+  }, []);
+
+  const handleOpenCharacterSelect = useCallback(() => {
+    soundRef.current?.unlock();
+    soundRef.current?.playClick();
+    setLeaderboardOpen(false);
+    setMemoryAlbumOpen(false);
+    setCharacterModalOpen(true);
+  }, []);
+
   const handleStartGame = useCallback(async () => {
     if (startingRun) return;
     soundRef.current?.unlock();
@@ -477,6 +627,7 @@ export default function App() {
       setRankingSubmitStatus('idle');
       setLeaderboardOpen(false);
       setMemoryAlbumOpen(false);
+      setCharacterModalOpen(false);
       setGameState('PLAYING');
       engineRef.current?.startNewRun();
     } finally {
@@ -546,6 +697,7 @@ export default function App() {
     soundRef.current?.unlock();
     soundRef.current?.playClick();
     setMemoryAlbumOpen(false);
+    setCharacterModalOpen(false);
     setLeaderboardTab(initialTab);
     setLeaderboardOpen(true);
   }, []);
@@ -554,6 +706,7 @@ export default function App() {
     soundRef.current?.unlock();
     soundRef.current?.playClick();
     setLeaderboardOpen(false);
+    setCharacterModalOpen(false);
     setMemoryAlbumTab(initialTab);
     setMemoryAlbumOpen(true);
   }, []);
@@ -598,11 +751,12 @@ export default function App() {
         return;
       }
 
-      if (leaderboardOpen || memoryAlbumOpen) {
+      if (leaderboardOpen || memoryAlbumOpen || characterModalOpen) {
         if (e.code === 'Escape') {
           e.preventDefault();
           setLeaderboardOpen(false);
           setMemoryAlbumOpen(false);
+          setCharacterModalOpen(false);
         }
         return;
       }
@@ -652,7 +806,14 @@ export default function App() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [handleStartGame, handleTogglePause, handleToggleMute, leaderboardOpen, memoryAlbumOpen]);
+  }, [
+    handleStartGame,
+    handleTogglePause,
+    handleToggleMute,
+    leaderboardOpen,
+    memoryAlbumOpen,
+    characterModalOpen,
+  ]);
 
   const totalCollectedMemories = useMemo(
     () => getTotalCollectedCount(records.collectedMemories),
@@ -773,6 +934,7 @@ export default function App() {
             records={records}
             selectedStage={selectedStage}
             unlockedStage={unlockedStage}
+            selectedCharacter={selectedCharacter}
             characterName={characterNameInput}
             collectedMemoryCount={totalCollectedMemories}
             totalMemoryCount={TOTAL_MEMORY_COUNT}
@@ -782,6 +944,7 @@ export default function App() {
             compactLandscape={isCompactLandscape}
             onChangeCharacterName={handleChangeCharacterName}
             onSelectStage={handleSelectStage}
+            onOpenCharacterSelect={handleOpenCharacterSelect}
             onOpenLeaderboard={() => handleOpenLeaderboard('all')}
             onOpenMemoryAlbum={() => handleOpenMemoryAlbum('all')}
             onSignIn={() => void handleSignIn()}
@@ -792,6 +955,7 @@ export default function App() {
         {gameState === 'PAUSED' && (
           <PauseOverlay
             stageId={selectedStage}
+            selectedCharacter={selectedCharacter}
             compactLandscape={isCompactLandscape}
             onResume={handleTogglePause}
             onRestart={() => void handleStartGame()}
@@ -802,6 +966,7 @@ export default function App() {
         {gameState === 'GAME_OVER' && summary && (
           <GameOverOverlay
             summary={summary}
+            selectedCharacter={selectedCharacter}
             characterName={activeRunName}
             newlyUnlockedStage={newlyUnlockedStage}
             newlyDiscoveredMemoryIds={newlyDiscoveredMemoryIds}
@@ -846,10 +1011,36 @@ export default function App() {
           onChangeTab={setMemoryAlbumTab}
           onClose={() => setMemoryAlbumOpen(false)}
         />
-      </div>
 
-      {/* Mobile Portrait -> Landscape Prompt */}
-      {showRotatePrompt && <RotateLandscapeOverlay onEnterLandscape={handleEnterLandscape} />}
+        {/* Playable Character Select Modal */}
+        <CharacterSelectModal
+          open={characterModalOpen}
+          selectedCharacter={selectedCharacter}
+          compactLandscape={isCompactLandscape}
+          onSelect={handleSelectCharacter}
+          onClose={() => setCharacterModalOpen(false)}
+        />
+
+        {/* Dismissible Auth Notice Toast */}
+        {authNotice && (
+          <div
+            role="alert"
+            className="absolute top-3 inset-x-3 z-40 flex justify-center pointer-events-none"
+          >
+            <div className="pointer-events-auto max-w-md flex items-center gap-2.5 rounded-2xl bg-[#FFFDF9]/98 border border-[#E8C5C0] shadow-[0_12px_30px_rgba(62,44,30,0.22)] px-4 py-2.5 text-left">
+              <p className="text-xs text-[#8C3B34] leading-snug flex-1">{authNotice}</p>
+              <button
+                type="button"
+                onClick={() => setAuthNotice(null)}
+                aria-label="안내 닫기"
+                className="min-h-[36px] min-w-[36px] flex items-center justify-center rounded-xl bg-[#F8ECEA] hover:bg-[#F2DFDC] text-[#8C3B34] shrink-0 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

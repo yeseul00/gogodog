@@ -1,7 +1,8 @@
+import { DEFAULT_CHARACTER_ID, isCharacterId } from './characters';
 import { isMemoryFragmentId } from './memories';
 import { MAX_CHARACTER_NAME_LENGTH, sanitizeCharacterName } from './ranking';
 import { isStageId } from './stages';
-import type { CollectedMemoriesMap, SavedRecords, StageId } from './types';
+import type { CharacterId, CollectedMemoriesMap, SavedRecords, StageId } from './types';
 
 const STORAGE_KEY = 'pome_walk_ddaengkong_v1';
 
@@ -12,10 +13,21 @@ const DEFAULT_RECORDS: SavedRecords = {
   isMuted: false,
   unlockedStage: 1,
   selectedStage: 1,
+  selectedCharacter: DEFAULT_CHARACTER_ID,
   characterName: '',
   localDefaultCounter: 1,
+  localDefaultCounters: {
+    ddaengkong: 1,
+    nari: 1,
+  },
   collectedMemories: {},
 };
+
+function sanitizePositiveInt(raw: unknown, fallback = 1): number {
+  return typeof raw === 'number' && Number.isFinite(raw)
+    ? Math.max(1, Math.floor(raw))
+    : fallback;
+}
 
 function sanitizeCollectedMemories(raw: unknown): CollectedMemoriesMap {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
@@ -42,19 +54,33 @@ function sanitizeCollectedMemories(raw: unknown): CollectedMemoriesMap {
 export function loadRecords(): SavedRecords {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_RECORDS, collectedMemories: {} };
+    if (!raw) {
+      return {
+        ...DEFAULT_RECORDS,
+        localDefaultCounters: { ...DEFAULT_RECORDS.localDefaultCounters },
+        collectedMemories: {},
+      };
+    }
     const parsed = JSON.parse(raw) as Partial<SavedRecords>;
     const unlockedStage: StageId = isStageId(parsed.unlockedStage) ? parsed.unlockedStage : 1;
     const rawSelected: StageId = isStageId(parsed.selectedStage) ? parsed.selectedStage : 1;
     const selectedStage: StageId = (Math.min(rawSelected, unlockedStage) as StageId) || 1;
+    const selectedCharacter: CharacterId = isCharacterId(parsed.selectedCharacter)
+      ? parsed.selectedCharacter
+      : DEFAULT_CHARACTER_ID;
     const characterName =
       typeof parsed.characterName === 'string'
         ? sanitizeCharacterName(parsed.characterName).slice(0, MAX_CHARACTER_NAME_LENGTH)
         : '';
-    const localDefaultCounter =
-      typeof parsed.localDefaultCounter === 'number' && Number.isFinite(parsed.localDefaultCounter)
-        ? Math.max(1, Math.floor(parsed.localDefaultCounter))
-        : 1;
+    const legacyCounter = sanitizePositiveInt(parsed.localDefaultCounter, 1);
+    const rawCounters =
+      parsed.localDefaultCounters && typeof parsed.localDefaultCounters === 'object'
+        ? parsed.localDefaultCounters
+        : undefined;
+    const localDefaultCounters: Record<CharacterId, number> = {
+      ddaengkong: sanitizePositiveInt(rawCounters?.ddaengkong, legacyCounter),
+      nari: sanitizePositiveInt(rawCounters?.nari, 1),
+    };
 
     return {
       bestScore:
@@ -72,12 +98,18 @@ export function loadRecords(): SavedRecords {
       isMuted: Boolean(parsed.isMuted),
       unlockedStage,
       selectedStage,
+      selectedCharacter,
       characterName,
-      localDefaultCounter,
+      localDefaultCounter: localDefaultCounters.ddaengkong,
+      localDefaultCounters,
       collectedMemories: sanitizeCollectedMemories(parsed.collectedMemories),
     };
   } catch {
-    return { ...DEFAULT_RECORDS, collectedMemories: {} };
+    return {
+      ...DEFAULT_RECORDS,
+      localDefaultCounters: { ...DEFAULT_RECORDS.localDefaultCounters },
+      collectedMemories: {},
+    };
   }
 }
 
