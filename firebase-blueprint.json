@@ -1,0 +1,99 @@
+{
+  "entities": {
+    "RankingEntry": {
+      "title": "RankingEntry",
+      "description": "Public, immutable walk run ranking record containing only non-PII gameplay metrics and player-chosen character display name.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the authenticated player who submitted the record.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "characterName": {
+          "type": "string",
+          "description": "Player-entered character display name or auto-assigned sequential default name (e.g. 땡콩1, 땡콩2).",
+          "minLength": 1,
+          "maxLength": 12
+        },
+        "stageId": {
+          "type": "integer",
+          "description": "Walk route stage number (1: 산책로, 2: 숲속 오솔길, 3: 저녁 카페거리).",
+          "enum": [1, 2, 3]
+        },
+        "score": {
+          "type": "integer",
+          "description": "Final run score in points (0 to 999999)."
+        },
+        "distance": {
+          "type": "integer",
+          "description": "Final distance walked in meters (0 to 1000)."
+        },
+        "outcome": {
+          "type": "string",
+          "description": "Whether Ddaengkong-i completed the stage walk or returned home early.",
+          "enum": ["completed", "early_return"],
+          "maxLength": 20
+        },
+        "treatsCollected": {
+          "type": "integer",
+          "description": "Total treats collected during the run (0 to 9999)."
+        },
+        "maxCombo": {
+          "type": "integer",
+          "description": "Highest treat combo achieved during the run (0 to 9999)."
+        },
+        "isPublic": {
+          "type": "boolean",
+          "description": "Must be true to surface the non-PII record on the public leaderboard."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Firestore server timestamp when the ranking entry was recorded."
+        }
+      },
+      "required": [
+        "userId",
+        "characterName",
+        "stageId",
+        "score",
+        "distance",
+        "outcome",
+        "treatsCollected",
+        "maxCombo",
+        "isPublic",
+        "createdAt"
+      ]
+    },
+    "NameCounter": {
+      "title": "NameCounter",
+      "description": "Monotonically incrementing counter used to assign sequential default character names (땡콩1, 땡콩2, ...).",
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "description": "Current issued sequential integer starting at 1."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Firestore server timestamp of the latest counter increment."
+        }
+      },
+      "required": ["count", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/rankings/{entryId}": {
+      "schema": { "$ref": "#/entities/RankingEntry" },
+      "description": "Public online leaderboard entries storing immutable non-PII walk results."
+    },
+    "/counters/{counterId}": {
+      "schema": { "$ref": "#/entities/NameCounter" },
+      "description": "Global sequential counter document (counters/defaultName) for unnamed player IDs (땡콩1, 땡콩2, ...)."
+    }
+  }
+}

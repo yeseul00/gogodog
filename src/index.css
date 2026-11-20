@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Jua", system-ui, sans-serif;
+  --font-sans: "Gowun Dodum", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    height: 100dvh;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+    font-family: var(--font-sans);
+    background-color: #f7f3eb;
+    color: #3a2b22;
+  }
+
+  button {
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-mono-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.watercolor-paper-bg {
+  background-color: #f7f3eb;
+  background-image:
+    radial-gradient(circle at 15% 20%, rgba(233, 185, 130, 0.14) 0%, transparent 45%),
+    radial-gradient(circle at 85% 80%, rgba(132, 169, 114, 0.12) 0%, transparent 45%);
+}
+
+.safe-pb {
+  padding-bottom: max(0.65rem, env(safe-area-inset-bottom));
+}
+
+.safe-pt {
+  padding-top: max(0.45rem, env(safe-area-inset-top));
+}
+
+.safe-px {
+  padding-left: max(0.875rem, env(safe-area-inset-left));
+  padding-right: max(0.875rem, env(safe-area-inset-right));
+}
+
+@keyframes gentle-rotate-phone {
+  0%,
+  18% {
+    transform: rotate(0deg);
+  }
+  45%,
+  72% {
+    transform: rotate(-90deg);
+  }
+  92%,
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+.animate-rotate-phone {
+  animation: gentle-rotate-phone 2.8s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

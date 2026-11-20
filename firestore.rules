@@ -1,0 +1,126 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Reusable hardened security primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    // Validation Blueprint: Public RankingEntry (strict keys, bounds, zero PII)
+    function isValidRankingEntry(data) {
+      return data.keys().hasAll([
+          'userId',
+          'characterName',
+          'stageId',
+          'score',
+          'distance',
+          'outcome',
+          'treatsCollected',
+          'maxCombo',
+          'isPublic',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'userId',
+          'characterName',
+          'stageId',
+          'score',
+          'distance',
+          'outcome',
+          'treatsCollected',
+          'maxCombo',
+          'isPublic',
+          'createdAt'
+        ])
+        && isValidId(data.userId)
+        && data.userId == request.auth.uid
+        && data.characterName is string
+        && data.characterName.size() >= 1
+        && data.characterName.size() <= 12
+        && data.stageId is int
+        && (data.stageId == 1 || data.stageId == 2 || data.stageId == 3)
+        && data.score is int
+        && data.score >= 0
+        && data.score <= 999999
+        && data.distance is int
+        && data.distance >= 0
+        && data.distance <= 1000
+        && data.outcome is string
+        && data.outcome.size() <= 20
+        && (data.outcome == 'completed' || data.outcome == 'early_return')
+        && data.treatsCollected is int
+        && data.treatsCollected >= 0
+        && data.treatsCollected <= 9999
+        && data.maxCombo is int
+        && data.maxCombo >= 0
+        && data.maxCombo <= 9999
+        && data.isPublic is bool
+        && data.isPublic == true
+        && data.createdAt is timestamp;
+    }
+
+    // Validation Blueprint: Monotonic NameCounter (땡콩1, 땡콩2, ...)
+    function isValidNameCounter(data) {
+      return data.keys().hasAll(['count', 'updatedAt'])
+        && data.keys().hasOnly(['count', 'updatedAt'])
+        && data.count is int
+        && data.count >= 1
+        && data.count <= 10000000
+        && data.updatedAt is timestamp;
+    }
+
+    // Public online leaderboard collection (non-PII, immutable once created)
+    match /rankings/{entryId} {
+      allow get: if isValidId(entryId) && existing().isPublic == true;
+      allow list: if existing().isPublic == true;
+      allow create: if isVerifiedUser()
+        && isValidId(entryId)
+        && isValidRankingEntry(incoming())
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // Sequential default name counter (strictly counters/defaultName, strictly +1 increments)
+    match /counters/{counterId} {
+      allow get: if isVerifiedUser() && isValidId(counterId) && counterId == 'defaultName';
+      allow list: if false;
+      allow create: if isVerifiedUser()
+        && isValidId(counterId)
+        && counterId == 'defaultName'
+        && isValidNameCounter(incoming())
+        && incoming().count == 1
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(counterId)
+        && counterId == 'defaultName'
+        && isValidNameCounter(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['count', 'updatedAt'])
+        && incoming().count == existing().count + 1
+        && incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+  }
+}

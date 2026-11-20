@@ -1,0 +1,6 @@
+{
+  "name": "포메 산책로 — 땡콩이의 산책",
+  "description": "갈색 포메라니안 땡콩이와 함께 따뜻한 수채화 동네 공원을 달리며 간식을 모으고 장애물을 피하는 모바일 횡스크롤 러닝 게임",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
