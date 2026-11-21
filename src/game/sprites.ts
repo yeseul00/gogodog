@@ -28,6 +28,7 @@ export function createEmptyGameSprites(): GameSprites {
     characters: {
       ddaengkong: { runFrames: [], jump: null, duck: null },
       nari: { runFrames: [], jump: null, duck: null },
+      kiki: { runFrames: [], jump: null, duck: null },
     },
     stagePanoramas: {
       1: null,
@@ -303,6 +304,7 @@ export async function loadGameSprites(): Promise<GameSprites> {
   result.ready =
     result.characters.ddaengkong.runFrames.length > 0 ||
     result.characters.nari.runFrames.length > 0 ||
+    result.characters.kiki.runFrames.length > 0 ||
     Boolean(result.stagePanoramas[1] || result.stagePanoramas[2] || result.stagePanoramas[3]);
 
   return result;

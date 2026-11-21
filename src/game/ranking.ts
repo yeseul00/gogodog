@@ -67,8 +67,8 @@ function makeSafeEntryId(uid: string): string {
 }
 
 /**
- * Allocates the next sequential default character name (땡콩1, 땡콩2 / 나리1, 나리2).
- * Uses an atomic Firestore transaction on counters/defaultName or counters/defaultName_nari when signed in,
+ * Allocates the next sequential default character name (땡콩1, 땡콩2 / 나리1, 나리2 / 키키1, 키키2).
+ * Uses an atomic Firestore transaction on counters/defaultName, counters/defaultName_nari, or counters/defaultName_kiki when signed in,
  * and falls back gracefully to a local per-character sequential number when offline or signed out.
  */
 export async function allocateDefaultCharacterName(

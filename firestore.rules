@@ -104,10 +104,12 @@ service cloud.firestore {
     }
 
     function isAllowedCounterId(counterId) {
-      return counterId == 'defaultName' || counterId == 'defaultName_nari';
+      return counterId == 'defaultName'
+        || counterId == 'defaultName_nari'
+        || counterId == 'defaultName_kiki';
     }
 
-    // Sequential default name counters (counters/defaultName & counters/defaultName_nari, strictly +1 increments)
+    // Sequential default name counters (counters/defaultName, counters/defaultName_nari, counters/defaultName_kiki; strictly +1 increments)
     match /counters/{counterId} {
       allow get: if isVerifiedUser() && isValidId(counterId) && isAllowedCounterId(counterId);
       allow list: if false;

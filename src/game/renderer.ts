@@ -2161,7 +2161,8 @@ export class WatercolorRenderer {
         ctx.fill();
       }
     } else {
-      ctx.fillStyle = characterId === 'nari' ? '#3B3B40' : '#D99E64';
+      ctx.fillStyle =
+        characterId === 'kiki' ? '#F8F6F2' : characterId === 'nari' ? '#3B3B40' : '#D99E64';
       ctx.beginPath();
       ctx.ellipse(0, duck ? -16 : -28, 26, duck ? 15 : 22, 0, 0, Math.PI * 2);
       ctx.fill();

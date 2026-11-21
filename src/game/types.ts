@@ -4,7 +4,7 @@ export type WalkOutcome = 'completed' | 'early_return';
 
 export type StageId = 1 | 2 | 3;
 
-export type CharacterId = 'ddaengkong' | 'nari';
+export type CharacterId = 'ddaengkong' | 'nari' | 'kiki';
 
 export type TimeOfDayPhase = 'morning' | 'afternoon' | 'sunset' | 'evening';
 

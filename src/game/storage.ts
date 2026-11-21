@@ -19,6 +19,7 @@ const DEFAULT_RECORDS: SavedRecords = {
   localDefaultCounters: {
     ddaengkong: 1,
     nari: 1,
+    kiki: 1,
   },
   collectedMemories: {},
 };
@@ -80,6 +81,7 @@ export function loadRecords(): SavedRecords {
     const localDefaultCounters: Record<CharacterId, number> = {
       ddaengkong: sanitizePositiveInt(rawCounters?.ddaengkong, legacyCounter),
       nari: sanitizePositiveInt(rawCounters?.nari, 1),
+      kiki: sanitizePositiveInt(rawCounters?.kiki, 1),
     };
 
     return {

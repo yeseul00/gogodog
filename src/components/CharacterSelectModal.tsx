@@ -68,7 +68,7 @@ export function CharacterSelectModal({
       >
         <div
           onClick={(e) => e.stopPropagation()}
-          className="w-full max-w-[650px] max-h-full overflow-hidden rounded-[24px] bg-[#FFFDF9]/98 backdrop-blur-md border border-white/95 shadow-[0_18px_46px_rgba(62,44,30,0.3)] flex flex-col"
+          className="w-full max-w-[760px] max-h-full overflow-hidden rounded-[24px] bg-[#FFFDF9]/98 backdrop-blur-md border border-white/95 shadow-[0_18px_46px_rgba(62,44,30,0.3)] flex flex-col"
         >
           {/* Compact Header */}
           <div className="px-4 py-2 border-b border-[#EFE6D8] flex items-center justify-between gap-2 shrink-0">
@@ -95,8 +95,8 @@ export function CharacterSelectModal({
             </button>
           </div>
 
-          {/* 2-Column Compact Character Cards */}
-          <div className="p-2.5 grid grid-cols-2 gap-2.5 overflow-y-auto">
+          {/* 3-Column Compact Character Cards */}
+          <div className="p-2 grid grid-cols-3 gap-2 overflow-y-auto">
             {CHARACTER_LIST.map((char) => {
               const isSelected = char.id === selectedCharacter;
               return (
@@ -106,14 +106,14 @@ export function CharacterSelectModal({
                   role="radio"
                   aria-checked={isSelected}
                   onClick={() => onSelect(char.id)}
-                  className={`text-left rounded-[18px] p-2.5 border-2 transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C86D3B] flex flex-col gap-2 ${
+                  className={`text-left rounded-[16px] p-2 border-2 transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C86D3B] flex flex-col gap-1.5 ${
                     isSelected
                       ? 'bg-[#FFFDF9] border-[#D67844] shadow-[0_6px_18px_rgba(214,120,68,0.18)]'
                       : 'bg-[#FAF4EB]/80 border-[#EAE0D0] hover:border-[#D7C6B1] hover:bg-[#FFFDF9]'
                   }`}
                 >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-16 h-16 rounded-[14px] overflow-hidden shrink-0 bg-[#F3ECE0] border border-white/80">
+                  <div className="flex items-center gap-2">
+                    <div className="w-12 h-12 rounded-[12px] overflow-hidden shrink-0 bg-[#F3ECE0] border border-white/80">
                       <img
                         src={char.titleArtUrl}
                         alt={char.titleArtAlt}
@@ -123,7 +123,7 @@ export function CharacterSelectModal({
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-1">
-                        <span className="font-display text-lg leading-tight text-[#4A3528] truncate">
+                        <span className="font-display text-base leading-tight text-[#4A3528] truncate">
                           {char.name}
                         </span>
                         {isSelected && (
@@ -205,7 +205,7 @@ export function CharacterSelectModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[600px] max-h-full overflow-y-auto rounded-[30px] bg-[#FFFDF9]/98 backdrop-blur-md border border-white/95 shadow-[0_22px_56px_rgba(62,44,30,0.3)]"
+        className="w-full max-w-[820px] max-h-full overflow-y-auto rounded-[30px] bg-[#FFFDF9]/98 backdrop-blur-md border border-white/95 shadow-[0_22px_56px_rgba(62,44,30,0.3)]"
       >
         {/* Header */}
         <div className="px-6 pt-5 pb-4 border-b border-[#EFE6D8] flex items-center justify-between gap-3">
@@ -236,11 +236,11 @@ export function CharacterSelectModal({
           </button>
         </div>
 
-        {/* 2-Column Character Comparison Cards */}
+        {/* 3-Column Character Comparison Cards */}
         <div
           role="radiogroup"
           aria-label="플레이할 강아지 캐릭터"
-          className="p-5 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-4"
+          className="p-5 sm:p-6 grid grid-cols-1 sm:grid-cols-3 gap-3.5"
         >
           {CHARACTER_LIST.map((char) => {
             const isSelected = char.id === selectedCharacter;

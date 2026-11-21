@@ -25,7 +25,7 @@ export interface CharacterDefinition {
   tagline: string;
   shortTraitSummary: string;
   defaultNamePrefix: string;
-  counterDocId: 'defaultName' | 'defaultName_nari';
+  counterDocId: 'defaultName' | 'defaultName_nari' | 'defaultName_kiki';
   titleArtUrl: string;
   titleArtAlt: string;
   happyHomeArtUrl: string;
@@ -120,7 +120,7 @@ export const CHARACTER_LIST: CharacterDefinition[] = [
     statBars: {
       jump: 96,
       fever: 74,
-      collect: 94,
+      collect: 86,
     },
     statBadges: {
       jump: '+9%',
@@ -139,15 +139,60 @@ export const CHARACTER_LIST: CharacterDefinition[] = [
       neutralFur: true,
     },
   },
+  {
+    id: 'kiki',
+    name: '키키',
+    roleTitle: '간식 컬렉터',
+    tagline: '폭신한 솜사탕 털처럼 넓은 수집 반경으로 간식과 추억 조각을 쏙쏙 모으고 균형 있게 달려요.',
+    shortTraitSummary: '수집 반경 +28% · 피버 +10%',
+    defaultNamePrefix: '키키',
+    counterDocId: 'defaultName_kiki',
+    titleArtUrl: '/src/assets/images/kiki_title_main_1795278094853.jpg',
+    titleArtAlt: '벚꽃 흩날리는 산책로에서 하얀 앞발을 들고 활짝 웃는 복슬복슬한 화이트 포메라니안 키키',
+    happyHomeArtUrl: '/src/assets/images/kiki_char_happy_1795278092785.jpg',
+    happyHomeArtAlt: '산책을 끝까지 마치고 따뜻한 햇살 아래 꼬리를 살랑이며 집에 무사히 도착한 화이트 포메라니안 키키',
+    sadHomeArtUrl: '/src/assets/images/kiki_char_sad_1795278092852.jpg',
+    sadHomeArtAlt: '하트를 모두 소진해 귀를 살짝 내리고 아쉬운 눈빛으로 뒤돌아보며 중도 귀가하는 화이트 포메라니안 키키',
+    accentColor: '#5B76A8',
+    softBg: '#EAF1FC',
+    traits: {
+      jumpMult: 1.04,
+      feverGainMult: 1.1,
+      feverDuration: 7.0,
+      collectRadiusMult: 1.28,
+    },
+    statBars: {
+      jump: 84,
+      fever: 86,
+      collect: 98,
+    },
+    statBadges: {
+      jump: '+4%',
+      fever: '+10% / 7.0초',
+      collect: '+28%',
+    },
+    spriteUrls: {
+      runFrames: [
+        '/src/assets/images/kiki_run_ext.png',
+        '/src/assets/images/kiki_run_mid.png',
+        '/src/assets/images/kiki_run_trot.png',
+        '/src/assets/images/kiki_run_mid.png',
+      ],
+      jump: '/src/assets/images/kiki_jump_up_1795278092785.jpg',
+      duck: '/src/assets/images/kiki_duck.png',
+      neutralFur: true,
+    },
+  },
 ];
 
 export const CHARACTER_MAP: Record<CharacterId, CharacterDefinition> = {
   ddaengkong: CHARACTER_LIST[0],
   nari: CHARACTER_LIST[1],
+  kiki: CHARACTER_LIST[2],
 };
 
 export function isCharacterId(value: unknown): value is CharacterId {
-  return value === 'ddaengkong' || value === 'nari';
+  return value === 'ddaengkong' || value === 'nari' || value === 'kiki';
 }
 
 export function getCharacterDefinition(id: CharacterId): CharacterDefinition {
