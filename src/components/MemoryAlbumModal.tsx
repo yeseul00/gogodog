@@ -66,7 +66,7 @@ export function MemoryAlbumModal({
 
   const tabs: { id: MemoryAlbumTab; label: string; countLabel: string }[] = [
     { id: 'all', label: '전체', countLabel: `${totalCollected}/${TOTAL_MEMORY_COUNT}` },
-    ...STAGE_LIST.map((s) => ({
+    ...STAGE_LIST.filter((s) => !s.isEndless).map((s) => ({
       id: s.id as MemoryAlbumTab,
       label: compactLandscape ? s.stepLabel : `${s.stepLabel} ${s.name}`,
       countLabel: `${getStageCollectedCount(collectedMemories, s.id)}/3`,

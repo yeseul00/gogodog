@@ -40,7 +40,7 @@ export function LeaderboardModal({
     { id: 'all', label: '전체' },
     ...STAGE_LIST.map((s) => ({
       id: s.id as RankingTab,
-      label: compactLandscape ? `${s.stepLabel} ${s.name}` : `${s.stepLabel} · ${s.name}`,
+      label: s.isEndless ? '무한 질주' : s.stepLabel,
     })),
   ];
 
@@ -191,7 +191,13 @@ export function LeaderboardModal({
                           )}
                           <span className="font-mono-num">{row.entry.distance}m</span>
                           <span aria-hidden="true">·</span>
-                          <span>{row.entry.outcome === 'completed' ? '완주' : '중도 귀가'}</span>
+                          <span>
+                            {row.entry.stageId === 4
+                              ? '무한 질주'
+                              : row.entry.outcome === 'completed'
+                                ? '완주'
+                                : '중도 귀가'}
+                          </span>
                         </div>
                       </div>
                     </div>

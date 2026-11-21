@@ -56,7 +56,7 @@ export const CHARACTER_LIST: CharacterDefinition[] = [
     name: '땡콩이',
     roleTitle: '피버 러너',
     tagline: '간식을 먹으면 피버 게이지가 빠르게 차오르고, 황금 피버 타임이 더 오래 이어져요.',
-    shortTraitSummary: '피버 충전 +18% · 피버 +1초',
+    shortTraitSummary: '피버 충전 +18% · 피버 +0.8초',
     defaultNamePrefix: '땡콩',
     counterDocId: 'defaultName',
     titleArtUrl: '/src/assets/images/ddaengkong_title_main_1795150047332.jpg',
@@ -70,7 +70,7 @@ export const CHARACTER_LIST: CharacterDefinition[] = [
     traits: {
       jumpMult: 1.0,
       feverGainMult: 1.18,
-      feverDuration: 7.5,
+      feverDuration: 5.3,
       collectRadiusMult: 1.0,
     },
     statBars: {
@@ -80,7 +80,7 @@ export const CHARACTER_LIST: CharacterDefinition[] = [
     },
     statBadges: {
       jump: '표준',
-      fever: '+18% / 7.5초',
+      fever: '+18% / 5.3초',
       collect: '표준',
     },
     spriteUrls: {
@@ -114,7 +114,7 @@ export const CHARACTER_LIST: CharacterDefinition[] = [
     traits: {
       jumpMult: 1.09,
       feverGainMult: 1.0,
-      feverDuration: 6.5,
+      feverDuration: 4.5,
       collectRadiusMult: 1.18,
     },
     statBars: {
@@ -124,7 +124,7 @@ export const CHARACTER_LIST: CharacterDefinition[] = [
     },
     statBadges: {
       jump: '+9%',
-      fever: '표준 / 6.5초',
+      fever: '표준 / 4.5초',
       collect: '+18%',
     },
     spriteUrls: {
@@ -158,7 +158,7 @@ export const CHARACTER_LIST: CharacterDefinition[] = [
     traits: {
       jumpMult: 1.04,
       feverGainMult: 1.1,
-      feverDuration: 7.0,
+      feverDuration: 4.9,
       collectRadiusMult: 1.28,
     },
     statBars: {
@@ -168,7 +168,7 @@ export const CHARACTER_LIST: CharacterDefinition[] = [
     },
     statBadges: {
       jump: '+4%',
-      fever: '+10% / 7.0초',
+      fever: '+10% / 4.9초',
       collect: '+28%',
     },
     spriteUrls: {

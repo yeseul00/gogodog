@@ -20,8 +20,8 @@
         },
         "stageId": {
           "type": "integer",
-          "description": "Walk route stage number (1: 산책로, 2: 숲속 오솔길, 3: 저녁 카페거리).",
-          "enum": [1, 2, 3]
+          "description": "Walk route stage number (1: 산책로, 2: 숲속 오솔길, 3: 저녁 카페거리, 4: 무한 질주).",
+          "enum": [1, 2, 3, 4]
         },
         "score": {
           "type": "integer",
@@ -29,7 +29,7 @@
         },
         "distance": {
           "type": "integer",
-          "description": "Final distance walked in meters (0 to 1000)."
+          "description": "Final distance walked in meters (0 to 999999)."
         },
         "outcome": {
           "type": "string",

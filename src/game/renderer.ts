@@ -10,13 +10,13 @@ import type {
   Particle,
   PomeranianState,
   SceneryProp,
-  StageId,
   TimeOfDayPhase,
   Treat,
+  VisualStageId,
 } from './types';
 
 export interface RenderContextState {
-  stageId: StageId;
+  stageId: VisualStageId;
   characterId: CharacterId;
   worldWidth: number;
   worldHeight: number;
@@ -279,7 +279,7 @@ export class WatercolorRenderer {
 
   private drawSkyAndPanorama(
     ctx: CanvasRenderingContext2D,
-    stageId: StageId,
+    stageId: VisualStageId,
     w: number,
     h: number,
     groundY: number,
@@ -398,7 +398,7 @@ export class WatercolorRenderer {
 
   private drawLamps(
     ctx: CanvasRenderingContext2D,
-    stageId: StageId,
+    stageId: VisualStageId,
     scenery: SceneryProp[],
     groundY: number,
     lampGlow: number,
@@ -522,7 +522,7 @@ export class WatercolorRenderer {
 
   private drawParkWalkway(
     ctx: CanvasRenderingContext2D,
-    stageId: StageId,
+    stageId: VisualStageId,
     w: number,
     h: number,
     groundY: number,
@@ -681,7 +681,7 @@ export class WatercolorRenderer {
 
   private drawHomeFinishArch(
     ctx: CanvasRenderingContext2D,
-    stageId: StageId,
+    stageId: VisualStageId,
     worldWidth: number,
     groundY: number,
     playerX: number,
@@ -813,7 +813,7 @@ export class WatercolorRenderer {
 
   private drawForegroundGrass(
     ctx: CanvasRenderingContext2D,
-    stageId: StageId,
+    stageId: VisualStageId,
     w: number,
     _h: number,
     groundY: number,
@@ -1051,8 +1051,9 @@ export class WatercolorRenderer {
       ctx.fill();
     } else if (obs.kind === 'pigeon') {
       // Soft realistic 3D-shaded park pigeon swooping at head height (duck under!)
-      const bob = Math.sin(elapsed * 8.5 + obs.bobPhase) * 3;
-      const wingAngle = Math.sin(elapsed * 15.5 + obs.bobPhase) * 0.65;
+      const bob = Math.sin(elapsed * 8.5 + obs.bobPhase) * 2.5;
+      const isDiving = Boolean(obs.swoopDepth && obs.y > obs.baseY + 4);
+      const wingAngle = Math.sin(elapsed * (isDiving ? 20 : 15.5) + obs.bobPhase) * 0.68;
       ctx.translate(0, bob);
 
       // Soft shadow on ground
@@ -1060,6 +1061,11 @@ export class WatercolorRenderer {
       ctx.beginPath();
       ctx.ellipse(0, obs.y + obs.height * 0.5 - bob + 3, 17, 3.8, 0, 0, Math.PI * 2);
       ctx.fill();
+
+      if (isDiving) {
+        // Nose-down pitch telegraphing an active dive into head height
+        ctx.rotate(-0.18);
+      }
 
       // Tail feathers
       ctx.fillStyle = '#6E7C8E';
@@ -1388,15 +1394,20 @@ export class WatercolorRenderer {
       ctx.ellipse(1, halfH + 2.5, halfW + 3, 4.2, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Subtle motion wake streaks on the right
-      ctx.strokeStyle = 'rgba(255, 250, 238, 0.55)';
-      ctx.lineWidth = 1.8;
+      // Motion wake streaks on the right (intensified for high-speed rush boards)
+      const isFastBoard = obs.speedMult >= 1.25;
+      ctx.strokeStyle = isFastBoard ? 'rgba(255, 245, 220, 0.82)' : 'rgba(255, 250, 238, 0.55)';
+      ctx.lineWidth = isFastBoard ? 2.2 : 1.8;
       ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(halfW + 4, -2);
-      ctx.lineTo(halfW + 16, -2);
-      ctx.moveTo(halfW + 7, 4);
-      ctx.lineTo(halfW + 15, 4);
+      ctx.moveTo(halfW + 4, -3);
+      ctx.lineTo(halfW + (isFastBoard ? 28 : 16), -3);
+      ctx.moveTo(halfW + 7, 2);
+      ctx.lineTo(halfW + (isFastBoard ? 24 : 15), 2);
+      if (isFastBoard) {
+        ctx.moveTo(halfW + 5, 6);
+        ctx.lineTo(halfW + 19, 6);
+      }
       ctx.stroke();
 
       // Metal trucks
@@ -1405,7 +1416,7 @@ export class WatercolorRenderer {
       ctx.fillRect(9, 1, 6, 5);
 
       // Spinning mint wheels
-      const wheelSpin = -elapsed * 14 + obs.bobPhase;
+      const wheelSpin = -elapsed * (isFastBoard ? 22 : 14) + obs.bobPhase;
       for (const wx of [-12, 12]) {
         ctx.save();
         ctx.translate(wx, halfH - 4.5);
@@ -2265,7 +2276,7 @@ export class WatercolorRenderer {
 
   private drawSunlightBokeh(
     ctx: CanvasRenderingContext2D,
-    stageId: StageId,
+    stageId: VisualStageId,
     w: number,
     groundY: number,
     elapsed: number,

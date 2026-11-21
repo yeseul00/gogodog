@@ -2,7 +2,9 @@ export type GameState = 'TITLE_MENU' | 'PLAYING' | 'PAUSED' | 'GAME_OVER';
 
 export type WalkOutcome = 'completed' | 'early_return';
 
-export type StageId = 1 | 2 | 3;
+export type VisualStageId = 1 | 2 | 3;
+
+export type StageId = VisualStageId | 4;
 
 export type CharacterId = 'ddaengkong' | 'nari' | 'kiki';
 
@@ -96,6 +98,9 @@ export interface Obstacle {
   bounceVx: number;
   bounceVy: number;
   bounceRot: number;
+  swoopDepth?: number;
+  bounceAmp?: number;
+  bounceFreq?: number;
 }
 
 export interface Treat {
@@ -156,6 +161,9 @@ export interface HudSnapshot {
   stageId: StageId;
   stageStepLabel: string;
   stageName: string;
+  isEndless: boolean;
+  endlessZoneNumber: number;
+  endlessZoneName: string;
   hearts: number;
   maxHearts: number;
   score: number;
@@ -179,6 +187,8 @@ export interface GameSummary {
   stageId: StageId;
   stageStepLabel: string;
   stageName: string;
+  isEndless: boolean;
+  endlessZoneNumber: number;
   outcome: WalkOutcome;
   score: number;
   bestScore: number;

@@ -66,7 +66,7 @@ export function TopHud({
 
               <span className="text-[#D8CBB8]" aria-hidden="true">·</span>
 
-              {/* Score, Distance & Stage Memories */}
+              {/* Score, Distance & Stage Memories / Endless Zone & Speed */}
               <div className="flex items-baseline gap-1.5 sm:gap-2 min-w-0 whitespace-nowrap">
                 <span
                   className={`font-mono-num font-bold text-[#4A3528] ${
@@ -77,20 +77,31 @@ export function TopHud({
                 </span>
                 <span className="text-[#D8CBB8]" aria-hidden="true">·</span>
                 <span className="font-mono-num text-xs sm:text-sm font-bold text-[#735A49]">
-                  {hud.distance}/{hud.goalDistance}m
+                  {hud.isEndless ? `${hud.distance}m` : `${hud.distance}/${hud.goalDistance}m`}
                 </span>
                 <span className="text-[#D8CBB8]" aria-hidden="true">·</span>
-                <span
-                  className="font-mono-num text-xs font-bold text-[#B85B2A]"
-                  aria-label={`이번 산책 추억 조각 ${hud.memoriesCollectedCount}개 / ${hud.stageMemoryTotal}개`}
-                >
-                  추억 {hud.memoriesCollectedCount}/{hud.stageMemoryTotal}
-                </span>
+                {hud.isEndless ? (
+                  <span
+                    className="font-mono-num text-xs font-bold text-[#B85B2A]"
+                    aria-label={`무한 질주 구역 ${hud.endlessZoneNumber}, 속도 ${hud.speedMultiplier.toFixed(1)}배`}
+                  >
+                    구역 {hud.endlessZoneNumber} · {hud.speedMultiplier.toFixed(1)}x
+                  </span>
+                ) : (
+                  <span
+                    className="font-mono-num text-xs font-bold text-[#B85B2A]"
+                    aria-label={`이번 산책 추억 조각 ${hud.memoriesCollectedCount}개 / ${hud.stageMemoryTotal}개`}
+                  >
+                    추억 {hud.memoriesCollectedCount}/{hud.stageMemoryTotal}
+                  </span>
+                )}
               </div>
 
               <span className="hidden md:inline text-[#D8CBB8]" aria-hidden="true">·</span>
               <span className="hidden md:inline text-xs font-bold text-[#5B8773] whitespace-nowrap">
-                {hud.stageStepLabel} · {hud.stageName}
+                {hud.isEndless
+                  ? `무한 질주 · ${hud.endlessZoneName}`
+                  : `${hud.stageStepLabel} · ${hud.stageName}`}
               </span>
             </div>
           ) : (
@@ -212,7 +223,9 @@ export function TopHud({
                 </>
               )}
               <span className="sm:hidden font-bold text-[#5B8773]">
-                {hud.stageStepLabel} · {hud.stageName}
+                {hud.isEndless
+                  ? `무한 · ${hud.endlessZoneName}`
+                  : `${hud.stageStepLabel} · ${hud.stageName}`}
               </span>
             </div>
           </div>

@@ -23,6 +23,7 @@ import type {
   TimeOfDayPhase,
   Treat,
   TreatKind,
+  VisualStageId,
   WalkOutcome,
 } from './types';
 
@@ -39,17 +40,17 @@ const OBSTACLE_SPECS: Record<
   cone: { w: 34, h: 34, y: 0, isAir: false, speedMult: 1.0 },
   fence: { w: 46, h: 40, y: 0, isAir: false, speedMult: 1.0 },
   sign: { w: 38, h: 46, y: 0, isAir: false, speedMult: 1.0 },
-  ball: { w: 30, h: 30, y: 0, isAir: false, speedMult: 1.08 },
+  ball: { w: 30, h: 30, y: 0, isAir: false, speedMult: 1.14 },
   hydrant: { w: 34, h: 48, y: 0, isAir: false, speedMult: 1.0 },
-  skateboard: { w: 54, h: 22, y: 0, isAir: false, speedMult: 1.13 },
+  skateboard: { w: 54, h: 22, y: 0, isAir: false, speedMult: 1.38 },
   branch: { w: 60, h: 30, y: 35, isAir: true, speedMult: 1.0 },
-  pigeon: { w: 46, h: 28, y: 36, isAir: true, speedMult: 1.07 },
-  balloon: { w: 36, h: 38, y: 36, isAir: true, speedMult: 0.96 },
-  frisbee: { w: 48, h: 18, y: 37, isAir: true, speedMult: 1.17 },
+  pigeon: { w: 46, h: 28, y: 35, isAir: true, speedMult: 1.18 },
+  balloon: { w: 36, h: 38, y: 36, isAir: true, speedMult: 0.98 },
+  frisbee: { w: 48, h: 18, y: 36, isAir: true, speedMult: 1.35 },
 };
 
 const MAX_HEARTS = 3;
-const FEVER_DURATION = 6.5;
+const FEVER_DURATION = 4.5;
 const JUMP_VELOCITY = 585;
 const GRAVITY = 1520;
 const FAST_FALL_MULT = 2.6;
@@ -121,6 +122,10 @@ export class PomeWalkEngine {
   private petalTimer = 0.25;
   private hudThrottleTimer = 0;
   private lastObstacleKind: ObstacleKind | null = null;
+  private lastHeartSpawnDist = -999;
+  private heartsSpawnedInRun = 0;
+  private lastEndlessZone = 0;
+  private nextEndlessMilestone = 250;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -278,9 +283,13 @@ export class PomeWalkEngine {
     this.memoryBonusTotal = 0;
     this.particles = [];
     this.floatingTexts = [];
-    this.nextObstacleTimer = 1.6;
+    this.nextObstacleTimer = this.stageId === 1 ? 1.55 : this.stageId === 2 ? 1.05 : 0.82;
     this.nextTreatTimer = 0.55;
     this.lastObstacleKind = null;
+    this.lastHeartSpawnDist = -999;
+    this.heartsSpawnedInRun = 0;
+    this.lastEndlessZone = 0;
+    this.nextEndlessMilestone = 250;
     this.gameState = 'PLAYING';
     this.emitHud();
   }
@@ -375,10 +384,20 @@ export class PomeWalkEngine {
     }
 
     const cfg = getStageDefinition(this.stageId);
-    const progressRatio = Math.min(1, this.distance / cfg.rampDistance);
-    // Gentle ease-out curve so early & mid game stay very comfortable
-    const easedProgress = progressRatio * progressRatio * (3 - 2 * progressRatio);
-    const targetSpeed = cfg.baseSpeed + (cfg.maxSpeed - cfg.baseSpeed) * easedProgress;
+    let targetSpeed: number;
+    if (cfg.isEndless) {
+      // Relentless asymptotic acceleration that keeps climbing past 1,000m+
+      const endlessCurve = 1 - Math.exp(-this.distance / 950);
+      targetSpeed = cfg.baseSpeed + (cfg.maxSpeed - cfg.baseSpeed) * endlessCurve;
+    } else {
+      const progressRatio = Math.min(1, this.distance / cfg.rampDistance);
+      // Stage 1 stays gentle; Stages 2 & 3 ramp briskly from early-mid run
+      const easedProgress =
+        this.stageId === 1
+          ? progressRatio * progressRatio * (3 - 2 * progressRatio)
+          : Math.pow(progressRatio, 0.85);
+      targetSpeed = cfg.baseSpeed + (cfg.maxSpeed - cfg.baseSpeed) * easedProgress;
+    }
     const feverBoost = this.isFever ? cfg.feverBoost : 1.0;
     this.speed = targetSpeed * feverBoost;
 
@@ -386,8 +405,46 @@ export class PomeWalkEngine {
     this.distance += distDelta;
     this.score += distDelta * (this.isFever ? 2.4 : 1.2);
 
-    // Check if Ddaengkong-i completed the full walk to return home happily!
-    if (this.distance >= cfg.goalDistance) {
+    if (cfg.isEndless) {
+      const currentZone = Math.floor(this.distance / 400);
+      if (currentZone > this.lastEndlessZone) {
+        this.lastEndlessZone = currentZone;
+        const zoneStage = getStageDefinition(this.getVisualStageId());
+        this.sound.playMemoryCollect();
+        this.spawnSparkleBurst(this.player.x + 12, this.player.y + 42, '#F5B841', 12);
+        this.floatingTexts.push({
+          x: Math.max(120, Math.min(this.worldWidth - 120, this.player.x + 48)),
+          y: this.player.y + 82,
+          vy: 34,
+          text: `구역 ${currentZone + 1} · ${zoneStage.name} 돌입!`,
+          color: '#3F6B58',
+          life: 1.5,
+          maxLife: 1.5,
+          scale: 1.15,
+        });
+      }
+
+      if (this.distance >= this.nextEndlessMilestone) {
+        const milestone = this.nextEndlessMilestone;
+        const milestoneIndex = Math.round(milestone / 250);
+        const bonus = 100 + milestoneIndex * 50;
+        this.score += bonus;
+        this.nextEndlessMilestone += 250;
+        this.sound.playFeverStart();
+        this.spawnSparkleBurst(this.player.x + 10, this.player.y + 38, '#F5B841', 14);
+        this.floatingTexts.push({
+          x: Math.max(110, Math.min(this.worldWidth - 110, this.player.x + 32)),
+          y: this.player.y + 62,
+          vy: 38,
+          text: `${milestone}m 돌파! +${bonus}`,
+          color: '#C86D14',
+          life: 1.35,
+          maxLife: 1.35,
+          scale: 1.16,
+        });
+      }
+    } else if (this.distance >= cfg.goalDistance) {
+      // Completed the full walk to return home happily!
       this.distance = cfg.goalDistance;
       const completionBonus = 300 + this.hearts * 100;
       this.score += completionBonus;
@@ -433,7 +490,7 @@ export class PomeWalkEngine {
         this.isFever = false;
         this.feverRemaining = 0;
         this.feverGauge = 0;
-        this.player.invincibleTimer = Math.max(this.player.invincibleTimer, 1.0);
+        this.player.invincibleTimer = Math.max(this.player.invincibleTimer, 0.55);
       }
     }
 
@@ -548,13 +605,22 @@ export class PomeWalkEngine {
     }
   }
 
+  private getVisualStageId(): VisualStageId {
+    if (this.stageId !== 4) {
+      return this.stageId;
+    }
+    const zoneIndex = Math.floor(this.distance / 400);
+    return (((zoneIndex % 3) + 1) as VisualStageId);
+  }
+
   private updateAmbientPetals(dt: number, moveSpeed: number): void {
+    const visualStage = this.getVisualStageId();
     this.petalTimer -= dt;
     if (this.petalTimer <= 0) {
       this.petalTimer =
-        this.stageId === 3 ? 0.34 + Math.random() * 0.48 : 0.28 + Math.random() * 0.45;
+        visualStage === 3 ? 0.34 + Math.random() * 0.48 : 0.28 + Math.random() * 0.45;
       if (this.particles.length < 75) {
-        if (this.stageId === 2) {
+        if (visualStage === 2) {
           // Sunlit green & golden woodland leaves
           const leafColors = ['#8EC85B', '#A9DB72', '#E8C568', '#6EB04A'];
           this.particles.push({
@@ -571,7 +637,7 @@ export class PomeWalkEngine {
             rotation: Math.random() * Math.PI * 2,
             vRot: (Math.random() - 0.5) * 3.0,
           });
-        } else if (this.stageId === 3) {
+        } else if (visualStage === 3) {
           // Cozy glowing warm golden café fairy-light motes
           this.particles.push({
             x: this.worldWidth + 12,
@@ -610,7 +676,7 @@ export class PomeWalkEngine {
 
   private updateSpawners(dt: number): void {
     const cfg = getStageDefinition(this.stageId);
-    const remainingMeters = cfg.goalDistance - this.distance;
+    const remainingMeters = cfg.isEndless ? Number.POSITIVE_INFINITY : cfg.goalDistance - this.distance;
 
     // Keep the final stretch before our Home Arch joyful & unobstructed
     if (remainingMeters > 18) {
@@ -622,7 +688,7 @@ export class PomeWalkEngine {
         const minGap = cfg.minGapStart - speedFactor * (cfg.minGapStart - cfg.minGapEnd);
         const maxGap = cfg.maxGapStart - speedFactor * (cfg.maxGapStart - cfg.maxGapEnd);
         this.nextObstacleTimer =
-          minGap + Math.random() * Math.max(0.35, maxGap - minGap) + extraGap;
+          minGap + Math.random() * Math.max(0.22, maxGap - minGap) + extraGap;
       }
     }
 
@@ -630,7 +696,7 @@ export class PomeWalkEngine {
       this.nextTreatTimer -= dt;
       if (this.nextTreatTimer <= 0) {
         this.spawnStandaloneTreats();
-        this.nextTreatTimer = 1.45 + Math.random() * 1.1;
+        this.nextTreatTimer = 1.55 + Math.random() * 1.15;
       }
     }
 
@@ -694,15 +760,45 @@ export class PomeWalkEngine {
     return chosen;
   }
 
-  private pushObstacle(kind: ObstacleKind, spawnX: number): Obstacle {
+  private pushObstacle(kind: ObstacleKind, spawnX: number, allowFastBurst = true): Obstacle {
     const cfg = getStageDefinition(this.stageId);
     const s = OBSTACLE_SPECS[kind];
-    const speedMult = kind === 'pigeon' ? cfg.pigeonSpeedMult : s.speedMult;
+    const intensity = cfg.isEndless
+      ? Math.min(1.65, cfg.hazardIntensity + this.distance / 2800)
+      : cfg.hazardIntensity;
+
+    let speedMult = kind === 'pigeon' ? cfg.pigeonSpeedMult : s.speedMult;
+    if (!allowFastBurst && speedMult > 1.08) {
+      // Keep multi-beat combo members speed-synced so fast obstacles never collide into neighbors
+      speedMult = 1.04;
+    } else if (kind === 'skateboard' && this.stageId >= 3) {
+      speedMult = Math.min(1.48, 1.36 + (intensity - 1.25) * 0.25);
+    } else if (kind === 'frisbee' && this.stageId >= 3) {
+      speedMult = Math.min(1.45, 1.33 + (intensity - 1.25) * 0.22);
+    }
+
+    const swoopDepth =
+      kind === 'pigeon' && this.stageId >= 2
+        ? Math.min(34, 22 + (intensity - 1.0) * 18)
+        : 0;
+    const bounceAmp =
+      kind === 'ball'
+        ? this.stageId === 1
+          ? 14
+          : Math.min(30, 22 + (intensity - 1.0) * 16)
+        : undefined;
+    const bounceFreq =
+      kind === 'ball'
+        ? this.stageId === 1
+          ? 4.8
+          : Math.min(7.2, 5.8 + (intensity - 1.0) * 2.2)
+        : undefined;
+
     const obs: Obstacle = {
       id: this.nextEntityId++,
       kind,
       x: spawnX,
-      y: s.y,
+      y: s.y + swoopDepth,
       baseY: s.y,
       width: s.w,
       height: s.h,
@@ -713,10 +809,46 @@ export class PomeWalkEngine {
       bounceVx: 0,
       bounceVy: 0,
       bounceRot: 0,
+      swoopDepth,
+      bounceAmp,
+      bounceFreq,
     };
     this.obstacles.push(obs);
     this.lastObstacleKind = kind;
     return obs;
+  }
+
+  private pickComboGroundKind(): ObstacleKind {
+    const pool: WeightedObstacle[] =
+      this.stageId >= 3
+        ? [
+            { kind: 'cone', weight: 28 },
+            { kind: 'fence', weight: 32 },
+            { kind: 'hydrant', weight: 25 },
+            { kind: 'sign', weight: 15 },
+          ]
+        : [
+            { kind: 'puddle', weight: 32 },
+            { kind: 'cone', weight: 34 },
+            { kind: 'fence', weight: 34 },
+          ];
+    return this.pickWeightedObstacle(pool);
+  }
+
+  private pickComboAirKind(): ObstacleKind {
+    const cfg = getStageDefinition(this.stageId);
+    const syncedAirPool = cfg.airPool.filter((i) => i.kind !== 'frisbee' && i.kind !== 'pigeon');
+    return this.pickWeightedObstacle(syncedAirPool.length > 0 ? syncedAirPool : cfg.airPool);
+  }
+
+  private spawnGuideTreatsForBeat(obs: Obstacle, kind: TreatKind): void {
+    const center = obs.x + obs.width * 0.5;
+    if (obs.isAir) {
+      this.spawnTreatAt(center, 16, kind);
+    } else {
+      const apexY = obs.height >= 44 ? 100 : 92;
+      this.spawnTreatAt(center, apexY, kind);
+    }
   }
 
   private spawnObstaclePattern(): number {
@@ -725,68 +857,112 @@ export class PomeWalkEngine {
     const canSpawnAir = this.distance >= cfg.airStartDist;
     const spawnAir = canSpawnAir && Math.random() < cfg.airChance;
 
-    const kind = this.pickWeightedObstacle(spawnAir ? cfg.airPool : cfg.groundPool);
-    const primary = this.pushObstacle(kind, spawnX);
+    const endlessBoost = cfg.isEndless ? Math.min(0.18, this.distance / 3200) : 0;
+    const effectiveComboChance = Math.min(0.75, cfg.comboChance + endlessBoost);
+    const effectiveTripleChance = Math.min(0.68, cfg.tripleComboChance + endlessBoost * 0.8);
 
-    // Stage-tiered rhythm combo patterns (Stage 2 late-run & Stage 3 café lane)
-    const canCombo =
-      cfg.comboChance > 0 &&
+    const willCombo =
+      effectiveComboChance > 0 &&
       this.distance >= cfg.comboStartDist &&
-      primary.speedMult <= 1.08 &&
-      Math.random() < cfg.comboChance;
+      Math.random() < effectiveComboChance;
 
-    if (canCombo) {
-      // Generous spatial gap so player can cleanly land/stand and react
-      const comboSpacing = Math.max(225, this.speed * 0.92);
-      const secondX = spawnX + primary.width + comboSpacing;
+    const kind = willCombo
+      ? spawnAir
+        ? this.pickComboAirKind()
+        : this.pickComboGroundKind()
+      : this.pickWeightedObstacle(spawnAir ? cfg.airPool : cfg.groundPool);
 
-      if (primary.isAir) {
-        // Duck -> Jump rhythm: follow an air obstacle with a crisp ground hop
-        const followGround: WeightedObstacle[] =
-          this.stageId === 3
-            ? [
-                { kind: 'cone', weight: 35 },
-                { kind: 'fence', weight: 35 },
-                { kind: 'hydrant', weight: 30 },
-              ]
-            : [
-                { kind: 'puddle', weight: 50 },
-                { kind: 'cone', weight: 50 },
-              ];
-        const followKind = this.pickWeightedObstacle(followGround);
-        const secondary = this.pushObstacle(followKind, secondX);
+    const primary = this.pushObstacle(kind, spawnX, !willCombo);
 
-        // Guide treats under the first obstacle and arching over the second
-        this.spawnTreatAt(spawnX + primary.width * 0.5, 16, 'biscuit');
-        this.spawnTreatAt(secondary.x + secondary.width * 0.5, 92, 'sweetpotato');
-        return 0.85;
-      } else {
-        // Jump -> Duck (if air unlocked) or Jump -> Low Hop rhythm
-        const followWithAir = canSpawnAir && Math.random() < 0.65;
-        const followKind = followWithAir
-          ? this.pickWeightedObstacle(cfg.airPool.filter((i) => i.kind !== 'frisbee'))
-          : this.pickWeightedObstacle([
-              { kind: 'puddle', weight: 50 },
-              { kind: 'cone', weight: 50 },
-            ]);
-        const secondary = this.pushObstacle(followKind, secondX);
+    if (willCombo) {
+      const isTriple =
+        canSpawnAir && effectiveTripleChance > 0 && Math.random() < effectiveTripleChance;
 
-        this.spawnTreatAt(spawnX + primary.width * 0.5, 94, 'sweetpotato');
-        if (secondary.isAir) {
-          this.spawnTreatAt(secondary.x + secondary.width * 0.5, 16, 'jerky');
+      // Speed-scaled fair reaction gaps so every 2-beat & 3-beat rhythm sequence is crisp & clearable
+      const gapGroundToAir = Math.max(188, this.speed * 0.64);
+      const gapAirToGround = Math.max(172, this.speed * 0.56);
+      const gapGroundToGround = Math.max(198, this.speed * 0.66);
+
+      const sequence: Obstacle[] = [primary];
+
+      if (isTriple) {
+        // 3-Beat Arcade Rhythm Patterns:
+        // (A) Air -> Ground -> Air  (Duck -> Jump -> Duck)
+        // (B) Ground -> Air -> Ground (Jump -> Duck -> Jump)
+        // (C) Ground -> Ground -> Air (Jump -> Jump -> Duck)
+        let secondIsAir: boolean;
+        let thirdIsAir: boolean;
+        if (primary.isAir) {
+          secondIsAir = false;
+          thirdIsAir = true;
+        } else if (Math.random() < 0.62) {
+          secondIsAir = true;
+          thirdIsAir = false;
         } else {
-          this.spawnTreatAt(secondary.x + secondary.width * 0.5, 86, 'biscuit');
+          secondIsAir = false;
+          thirdIsAir = true;
         }
-        return 0.85;
+
+        const gap1 = primary.isAir
+          ? gapAirToGround
+          : secondIsAir
+            ? gapGroundToAir
+            : gapGroundToGround;
+        const x2 = primary.x + primary.width + gap1;
+        const second = this.pushObstacle(
+          secondIsAir ? this.pickComboAirKind() : this.pickComboGroundKind(),
+          x2,
+          false
+        );
+        sequence.push(second);
+
+        const gap2 = second.isAir
+          ? gapAirToGround
+          : thirdIsAir
+            ? gapGroundToAir
+            : gapGroundToGround;
+        const x3 = second.x + second.width + gap2;
+        const third = this.pushObstacle(
+          thirdIsAir ? this.pickComboAirKind() : this.pickComboGroundKind(),
+          x3,
+          false
+        );
+        sequence.push(third);
+
+        this.spawnGuideTreatsForBeat(primary, 'biscuit');
+        this.spawnGuideTreatsForBeat(second, 'sweetpotato');
+        this.spawnGuideTreatsForBeat(third, 'jerky');
+      } else {
+        // 2-Beat Rhythm Patterns: Duck->Jump, Jump->Duck, or Double Hop
+        const secondIsAir = primary.isAir ? false : canSpawnAir && Math.random() < 0.65;
+        const gap1 = primary.isAir
+          ? gapAirToGround
+          : secondIsAir
+            ? gapGroundToAir
+            : gapGroundToGround;
+        const x2 = primary.x + primary.width + gap1;
+        const second = this.pushObstacle(
+          secondIsAir ? this.pickComboAirKind() : this.pickComboGroundKind(),
+          x2,
+          false
+        );
+        sequence.push(second);
+
+        this.spawnGuideTreatsForBeat(primary, 'biscuit');
+        this.spawnGuideTreatsForBeat(second, secondIsAir ? 'jerky' : 'sweetpotato');
       }
+
+      const lastObs = sequence[sequence.length - 1];
+      const totalSpan = lastObs.x + lastObs.width - spawnX;
+      return totalSpan / Math.max(220, this.speed) + (isTriple ? 0.36 : 0.28);
     }
 
     if (primary.isAir) {
-      const count = 2 + (Math.random() < 0.5 ? 1 : 0);
+      const count = 2 + (Math.random() < 0.45 ? 1 : 0);
       for (let i = 0; i < count; i++) {
         this.spawnTreatAt(spawnX - 16 + i * 38, 16, i === 1 ? 'sweetpotato' : 'biscuit');
       }
-    } else if (Math.random() < 0.72) {
+    } else if (Math.random() < 0.68) {
       const center = spawnX + primary.width * 0.5;
       const apexY = primary.height >= 44 ? 102 : 94;
       this.spawnTreatAt(center - 44, 64, 'biscuit');
@@ -798,14 +974,20 @@ export class PomeWalkEngine {
   }
 
   private spawnStandaloneTreats(): void {
+    const cfg = getStageDefinition(this.stageId);
     const spawnX = this.worldWidth + 60;
     const tooClose = this.obstacles.some((o) => Math.abs(o.x - spawnX) < 110);
     if (tooClose) return;
 
-    if (this.hearts < MAX_HEARTS && Math.random() < 0.16) {
+    const withinHeartCap = cfg.maxHeartSpawns === 0 || this.heartsSpawnedInRun < cfg.maxHeartSpawns;
+    const heartReady = this.distance - this.lastHeartSpawnDist >= cfg.heartCooldownDist;
+    if (this.hearts < MAX_HEARTS && withinHeartCap && heartReady && Math.random() < 0.075) {
       const hasActiveHeart = this.treats.some((t) => t.kind === 'heartCookie' && !t.collected);
       if (!hasActiveHeart) {
-        this.spawnTreatAt(spawnX, 66, 'heartCookie');
+        this.lastHeartSpawnDist = this.distance;
+        this.heartsSpawnedInRun += 1;
+        // High jump arc placement so heart recovery requires deliberate timing
+        this.spawnTreatAt(spawnX, 92, 'heartCookie');
         return;
       }
     }
@@ -817,16 +999,17 @@ export class PomeWalkEngine {
       }
     } else {
       this.spawnTreatAt(spawnX, 58, 'biscuit');
-      this.spawnTreatAt(spawnX + 42, 84, Math.random() < 0.44 ? 'jerky' : 'sweetpotato');
+      this.spawnTreatAt(spawnX + 42, 86, Math.random() < 0.44 ? 'jerky' : 'sweetpotato');
     }
   }
 
   private spawnTreatAt(x: number, y: number, kind: TreatKind): void {
+    // Rebalanced fever gains so Fever is an earned tactical payoff rather than constant invincibility
     const config: Record<TreatKind, { radius: number; points: number; feverGain: number }> = {
-      biscuit: { radius: 13, points: 15, feverGain: 10 },
-      sweetpotato: { radius: 13, points: 25, feverGain: 14 },
-      jerky: { radius: 15, points: 50, feverGain: 24 },
-      heartCookie: { radius: 14, points: 30, feverGain: 12 },
+      biscuit: { radius: 13, points: 15, feverGain: 6 },
+      sweetpotato: { radius: 13, points: 25, feverGain: 9 },
+      jerky: { radius: 15, points: 50, feverGain: 15 },
+      heartCookie: { radius: 14, points: 30, feverGain: 8 },
     };
     const c = config[kind];
     this.treats.push({
@@ -875,9 +1058,20 @@ export class PomeWalkEngine {
       obs.x -= this.speed * obs.speedMult * dt;
 
       if (obs.kind === 'ball') {
-        obs.y = obs.baseY + Math.abs(Math.sin(this.elapsed * 4.8 + obs.bobPhase)) * 12;
+        const amp = obs.bounceAmp ?? 24;
+        const freq = obs.bounceFreq ?? 5.8;
+        obs.y = obs.baseY + Math.abs(Math.sin(this.elapsed * freq + obs.bobPhase)) * amp;
+      } else if (obs.kind === 'pigeon' && obs.swoopDepth && obs.swoopDepth > 0) {
+        // Swoop smoothly from upper sky into head-height lane right before reaching the player
+        const diveStartDist = Math.max(210, this.worldWidth * 0.62);
+        const diveEndX = this.player.x + 120;
+        const rawT = Math.min(1, Math.max(0, (obs.x - diveEndX) / diveStartDist));
+        const wingWave = Math.sin(this.elapsed * 6.5 + obs.bobPhase) * 2.2;
+        obs.y = obs.baseY + rawT * rawT * obs.swoopDepth + wingWave;
       } else if (obs.kind === 'balloon') {
-        obs.y = obs.baseY + Math.sin(this.elapsed * 2.8 + obs.bobPhase) * 2.2;
+        obs.y = obs.baseY + Math.sin(this.elapsed * 3.6 + obs.bobPhase) * 7.5;
+      } else if (obs.kind === 'frisbee') {
+        obs.y = obs.baseY + Math.sin(this.elapsed * 7.8 + obs.bobPhase) * 3.8;
       }
 
       if (obs.x + obs.width < -90) {
@@ -885,7 +1079,8 @@ export class PomeWalkEngine {
         continue;
       }
 
-      const padX =
+      const shrink = getStageDefinition(this.stageId).hitboxShrink;
+      const basePadX =
         obs.kind === 'puddle' || obs.kind === 'skateboard'
           ? 9
           : obs.kind === 'cone' || obs.kind === 'hydrant'
@@ -893,8 +1088,9 @@ export class PomeWalkEngine {
             : obs.isAir
               ? 8
               : 7;
-      const padBottom = obs.isAir ? 3 : 0;
-      const padTop = obs.kind === 'cone' ? 7 : obs.isAir ? 4 : 5;
+      const padX = Math.max(3, basePadX - shrink);
+      const padBottom = obs.isAir ? Math.max(1, 3 - shrink * 0.5) : 0;
+      const padTop = Math.max(2, (obs.kind === 'cone' ? 7 : obs.isAir ? 4 : 5) - shrink * 0.6);
       const oLeft = obs.x + padX;
       const oRight = obs.x + obs.width - padX;
       const oBottom = obs.y + padBottom;
@@ -1051,7 +1247,7 @@ export class PomeWalkEngine {
 
     if (!this.isFever) {
       const { feverGainMult } = getCharacterDefinition(this.characterId).traits;
-      const streakBoost = 1 + Math.min(0.6, this.combo * 0.06);
+      const streakBoost = 1 + Math.min(0.38, this.combo * 0.04);
       this.feverGauge = Math.min(100, this.feverGauge + t.feverGain * streakBoost * feverGainMult);
       if (this.feverGauge >= 100) {
         this.activateFever();
@@ -1168,10 +1364,13 @@ export class PomeWalkEngine {
 
     this.emitHud();
     const { label } = this.getTimePhaseInfo();
+    const endlessZoneNumber = cfg.isEndless ? Math.floor(this.distance / 400) + 1 : 1;
     this.callbacks.onGameOver({
       stageId: cfg.id,
       stageStepLabel: cfg.stepLabel,
       stageName: cfg.name,
+      isEndless: cfg.isEndless,
+      endlessZoneNumber,
       outcome,
       score: finalScore,
       bestScore: this.bestScore,
@@ -1292,6 +1491,14 @@ export class PomeWalkEngine {
       // Gently breathe around the stage's signature time-of-day while previewing on title screen
       const mid = cfg.timeCycleStart + (cfg.timeCycleEnd - cfg.timeCycleStart) * 0.22;
       cycleT = mid + Math.sin(this.elapsed * 0.25) * 0.14;
+    } else if (cfg.isEndless) {
+      // Smooth continuous day-to-evening lighting cycle across Endless zones
+      const visualStage = this.getVisualStageId();
+      const zoneProgress = (this.distance % 400) / 400;
+      const visualCfg = getStageDefinition(visualStage);
+      cycleT =
+        visualCfg.timeCycleStart +
+        (visualCfg.timeCycleEnd - visualCfg.timeCycleStart) * zoneProgress;
     } else {
       const progress = Math.min(1, Math.max(0, this.distance / cfg.goalDistance));
       cycleT = cfg.timeCycleStart + (cfg.timeCycleEnd - cfg.timeCycleStart) * progress;
@@ -1310,10 +1517,15 @@ export class PomeWalkEngine {
     const { phase, label } = this.getTimePhaseInfo();
     const currentScore = Math.floor(this.score);
     const cfg = getStageDefinition(this.stageId);
+    const visualStage = getStageDefinition(this.getVisualStageId());
+    const endlessZoneNumber = cfg.isEndless ? Math.floor(this.distance / 400) + 1 : 1;
     this.callbacks.onHudUpdate({
       stageId: cfg.id,
       stageStepLabel: cfg.stepLabel,
       stageName: cfg.name,
+      isEndless: cfg.isEndless,
+      endlessZoneNumber,
+      endlessZoneName: visualStage.name,
       hearts: this.hearts,
       maxHearts: MAX_HEARTS,
       score: currentScore,
@@ -1346,14 +1558,14 @@ export class PomeWalkEngine {
     this.ctx.setTransform(this.dpr * this.scale, 0, 0, this.dpr * this.scale, 0, 0);
 
     this.renderer.render(this.ctx, {
-      stageId: this.stageId,
+      stageId: this.getVisualStageId(),
       characterId: this.characterId,
       worldWidth: this.worldWidth,
       worldHeight: this.worldHeight,
       groundY: this.groundY,
       distance: this.distance,
       goalDistance: cfg.goalDistance,
-      showHomeGate: this.gameState !== 'TITLE_MENU',
+      showHomeGate: this.gameState !== 'TITLE_MENU' && !cfg.isEndless,
       elapsed: this.elapsed,
       speed: this.speed,
       player: this.player,

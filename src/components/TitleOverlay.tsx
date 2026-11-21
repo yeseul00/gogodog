@@ -173,12 +173,12 @@ export function TitleOverlay({
               />
             </div>
 
-            {/* 3-Stage Walk Route Selector */}
+            {/* 4-Stage Walk Route Selector (1-3 + Endless) */}
             <div className="mt-1.5 w-full">
               <div
                 role="radiogroup"
                 aria-label="산책 단계 선택"
-                className="grid grid-cols-3 gap-1 p-1 rounded-[14px] bg-[#F3ECE0] border border-[#E7DCCB]"
+                className="grid grid-cols-4 gap-1 p-1 rounded-[14px] bg-[#F3ECE0] border border-[#E7DCCB]"
               >
                 {STAGE_LIST.map((stage) => {
                   const selected = stage.id === selectedStage;
@@ -203,7 +203,9 @@ export function TitleOverlay({
                         {locked && <Lock className="w-2.5 h-2.5" aria-hidden="true" />}
                         <span>{stage.stepLabel}</span>
                       </span>
-                      <span className="text-[11px] font-bold">{stage.name}</span>
+                      <span className="text-[10px] font-bold truncate max-w-full">
+                        {stage.name}
+                      </span>
                     </button>
                   );
                 })}
@@ -230,7 +232,13 @@ export function TitleOverlay({
               className="mt-2 w-full min-h-[44px] rounded-[16px] bg-[#D67844] hover:bg-[#C46936] active:scale-[0.98] text-[#FFFDF9] font-display text-lg tracking-wide flex items-center justify-center gap-2 shadow-[0_6px_18px_rgba(214,120,68,0.34)] transition-all whitespace-nowrap cursor-pointer disabled:opacity-70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C86D3B]"
             >
               <Play className="w-4 h-4 fill-current" aria-hidden="true" />
-              <span>{starting ? '출발 준비 중...' : `${activeStage.stepLabel} 산책 시작`}</span>
+              <span>
+                {starting
+                  ? '출발 준비 중...'
+                  : activeStage.isEndless
+                    ? '무한 질주 시작'
+                    : `${activeStage.stepLabel} 산책 시작`}
+              </span>
             </button>
           </div>
         </div>
@@ -363,12 +371,12 @@ export function TitleOverlay({
             </div>
           </div>
 
-          {/* 3-Stage Walk Route Selector */}
+          {/* 4-Stage Walk Route Selector (1-3 + Endless) */}
           <div className="mt-3 w-full">
             <div
               role="radiogroup"
               aria-label="산책 단계 선택"
-              className="grid grid-cols-3 gap-1 p-1 rounded-[18px] bg-[#F3ECE0] border border-[#E7DCCB]"
+              className="grid grid-cols-4 gap-1 p-1 rounded-[18px] bg-[#F3ECE0] border border-[#E7DCCB]"
             >
               {STAGE_LIST.map((stage) => {
                 const selected = stage.id === selectedStage;
@@ -381,7 +389,7 @@ export function TitleOverlay({
                     aria-checked={selected}
                     aria-disabled={locked}
                     onClick={() => handleStagePress(stage.id)}
-                    className={`min-h-[48px] rounded-[14px] px-1.5 py-1.5 flex flex-col items-center justify-center leading-tight whitespace-nowrap transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C86D3B] ${
+                    className={`min-h-[48px] rounded-[14px] px-1 py-1.5 flex flex-col items-center justify-center leading-tight whitespace-nowrap transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C86D3B] ${
                       selected
                         ? 'bg-[#FFFDF9] text-[#C86D3B] font-bold shadow-[0_3px_10px_rgba(92,70,50,0.12)]'
                         : locked
@@ -393,7 +401,9 @@ export function TitleOverlay({
                       {locked && <Lock className="w-3 h-3" aria-hidden="true" />}
                       <span>{stage.stepLabel}</span>
                     </span>
-                    <span className="text-xs sm:text-[13px] font-bold mt-0.5">{stage.name}</span>
+                    <span className="text-[11px] sm:text-xs font-bold mt-0.5 truncate max-w-full">
+                      {stage.name}
+                    </span>
                   </button>
                 );
               })}
@@ -442,7 +452,13 @@ export function TitleOverlay({
             className="mt-4 w-full min-h-[52px] rounded-[22px] bg-[#D67844] hover:bg-[#C46936] active:scale-[0.98] text-[#FFFDF9] font-display text-xl tracking-wide flex items-center justify-center gap-2 shadow-[0_8px_22px_rgba(214,120,68,0.34)] transition-all whitespace-nowrap cursor-pointer disabled:opacity-70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C86D3B]"
           >
             <Play className="w-5 h-5 fill-current" aria-hidden="true" />
-            <span>{starting ? '출발 준비 중...' : `${activeStage.stepLabel} 산책 시작`}</span>
+            <span>
+              {starting
+                ? '출발 준비 중...'
+                : activeStage.isEndless
+                  ? '무한 질주 시작'
+                  : `${activeStage.stepLabel} 산책 시작`}
+            </span>
           </button>
 
           <p className="mt-2 text-[11px] text-[#8C7868]">

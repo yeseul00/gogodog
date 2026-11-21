@@ -44,6 +44,9 @@ export function GameOverOverlay({
 }: GameOverOverlayProps) {
   const [imgFailed, setImgFailed] = useState(false);
   const isCompleted = summary.outcome === 'completed';
+  const isEndless = summary.isEndless;
+  const showHappyPortrait =
+    isCompleted || (isEndless && (summary.distance >= 400 || summary.isNewBestScore || summary.isNewBestDistance));
   const nextStageId = isCompleted ? getNextStageId(summary.stageId) : null;
   const nextStage = nextStageId ? getStageDefinition(nextStageId) : null;
   const unlockedStageDef = newlyUnlockedStage ? getStageDefinition(newlyUnlockedStage) : null;
@@ -54,20 +57,23 @@ export function GameOverOverlay({
     setImgFailed(false);
   }, [summary.outcome, summary.stageId, selectedCharacter]);
 
-  const portraitSrc = isCompleted
+  const portraitSrc = showHappyPortrait
     ? activeCharacter.happyHomeArtUrl
     : activeCharacter.sadHomeArtUrl;
-  const portraitAlt = isCompleted
+  const portraitAlt = showHappyPortrait
     ? activeCharacter.happyHomeArtAlt
     : activeCharacter.sadHomeArtAlt;
 
-  const outcomeTitle = isCompleted
-    ? `${activeCharacter.name} 즐겁게 귀가!`
-    : `${activeCharacter.name} 중도 귀가`;
+  const outcomeTitle = isEndless
+    ? `${activeCharacter.name} 무한 질주 기록!`
+    : isCompleted
+      ? `${activeCharacter.name} 즐겁게 귀가!`
+      : `${activeCharacter.name} 중도 귀가`;
 
-  const completionDesc =
-    isCompleted && !nextStage
-      ? `${activeCharacter.name}와 3단계 저녁 카페거리까지 모든 산책 코스를 멋지게 완주했어요!`
+  const completionDesc = isEndless
+    ? `${activeCharacter.name}가 구역 ${summary.endlessZoneNumber}까지 총 ${summary.distance}m를 힘차게 돌파했어요!`
+    : isCompleted && nextStage?.isEndless
+      ? `${activeCharacter.name}와 3단계 저녁 카페거리까지 완주했어요! 이제 무한 질주에 도전해 보세요.`
       : isCompleted
         ? `${activeCharacter.name}가 산책을 끝까지 마치고 꼬리를 살랑이며 무사히 집에 도착했어요.`
         : `${activeCharacter.name}가 조금 지쳐서 중도 귀가했어요. 잠깐 쉬고 다시 산책해 볼까요?`;
@@ -175,12 +181,14 @@ export function GameOverOverlay({
                 </div>
               </div>
               <div className="py-1 px-1.5">
-                <div className="text-[10px] text-[#847060]">산책 거리</div>
+                <div className="text-[10px] text-[#847060]">{isEndless ? '도달 거리' : '산책 거리'}</div>
                 <div className="font-mono-num text-lg font-bold text-[#4A3528] leading-tight">
                   {summary.distance}m
                 </div>
                 <div className="text-[10px] text-[#968272] font-mono-num">
-                  목표 {summary.goalDistance}m {isCompleted ? '달성' : '중'}
+                  {isEndless
+                    ? `구역 ${summary.endlessZoneNumber} 도달`
+                    : `목표 ${summary.goalDistance}m ${isCompleted ? '달성' : '중'}`}
                 </div>
               </div>
             </div>
@@ -191,39 +199,49 @@ export function GameOverOverlay({
                   간식 <strong className="font-mono-num text-[#4A3528]">{summary.treatsCollected}개</strong>
                 </span>
                 <span className="text-[#D8CBB8]" aria-hidden="true">·</span>
-                <span>
-                  추억{' '}
-                  <strong className="font-mono-num text-[#B85B2A]">
-                    {summary.collectedMemoryIds.length}/{stageMemories.length}
-                  </strong>
-                </span>
-                {summary.memoryBonusTotal > 0 && (
+                {isEndless ? (
+                  <span>
+                    최고 콤보 <strong className="font-mono-num text-[#B85B2A]">{summary.maxCombo}x</strong>
+                  </span>
+                ) : (
                   <>
-                    <span className="text-[#D8CBB8]" aria-hidden="true">·</span>
-                    <span className="font-mono-num font-bold text-[#497C66]">
-                      +{summary.memoryBonusTotal}
+                    <span>
+                      추억{' '}
+                      <strong className="font-mono-num text-[#B85B2A]">
+                        {summary.collectedMemoryIds.length}/{stageMemories.length}
+                      </strong>
                     </span>
+                    {summary.memoryBonusTotal > 0 && (
+                      <>
+                        <span className="text-[#D8CBB8]" aria-hidden="true">·</span>
+                        <span className="font-mono-num font-bold text-[#497C66]">
+                          +{summary.memoryBonusTotal}
+                        </span>
+                      </>
+                    )}
                   </>
                 )}
               </div>
 
-              <button
-                type="button"
-                onClick={onOpenMemoryAlbum}
-                className="flex items-center gap-1 text-[#3F6B58] hover:text-[#2F5343] font-bold whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                <div className="flex items-center -space-x-1">
-                  {stageMemories.map((frag) => (
-                    <MemoryIcon
-                      key={frag.id}
-                      id={frag.id}
-                      locked={!summary.collectedMemoryIds.includes(frag.id)}
-                      size={22}
-                    />
-                  ))}
-                </div>
-                <span>앨범 →</span>
-              </button>
+              {!isEndless && (
+                <button
+                  type="button"
+                  onClick={onOpenMemoryAlbum}
+                  className="flex items-center gap-1 text-[#3F6B58] hover:text-[#2F5343] font-bold whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <div className="flex items-center -space-x-1">
+                    {stageMemories.map((frag) => (
+                      <MemoryIcon
+                        key={frag.id}
+                        id={frag.id}
+                        locked={!summary.collectedMemoryIds.includes(frag.id)}
+                        size={22}
+                      />
+                    ))}
+                  </div>
+                  <span>앨범 →</span>
+                </button>
+              )}
             </div>
 
             <div className="mt-2 flex items-center gap-1.5">
@@ -264,7 +282,13 @@ export function GameOverOverlay({
                   className="flex-1 min-h-[44px] px-3 rounded-[14px] bg-[#D67844] hover:bg-[#C46936] active:scale-[0.98] text-[#FFFDF9] font-display text-base flex items-center justify-center gap-1.5 shadow-[0_6px_16px_rgba(214,120,68,0.3)] transition-all whitespace-nowrap cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" strokeWidth={2.5} aria-hidden="true" />
-                  <span>{isCompleted ? '한 번 더 산책하기' : '다시 산책하기'}</span>
+                  <span>
+                    {isEndless
+                      ? '다시 무한 질주'
+                      : isCompleted
+                        ? '한 번 더 산책하기'
+                        : '다시 산책하기'}
+                  </span>
                 </button>
               )}
             </div>
@@ -355,78 +379,96 @@ export function GameOverOverlay({
               </div>
             </div>
             <div className="py-2.5 px-2">
-              <div className="text-[11px] text-[#847060]">산책 거리</div>
+              <div className="text-[11px] text-[#847060]">{isEndless ? '도달 거리' : '산책 거리'}</div>
               <div className="font-mono-num text-2xl font-bold text-[#4A3528] mt-0.5">
                 {summary.distance}m
               </div>
               <div className="text-[11px] text-[#968272] font-mono-num">
-                {isCompleted
-                  ? `목표 ${summary.goalDistance}m 달성`
-                  : `목표 ${summary.goalDistance}m 중`}
+                {isEndless
+                  ? `구역 ${summary.endlessZoneNumber} · 최장 ${summary.bestDistance}m`
+                  : isCompleted
+                    ? `목표 ${summary.goalDistance}m 달성`
+                    : `목표 ${summary.goalDistance}m 중`}
               </div>
             </div>
           </div>
 
-          {/* Collected Stage Memory Fragments Strip */}
-          <div className="mt-3 rounded-[20px] bg-[#FAF4EB] border border-[#EDE2D2] px-3.5 py-2.5 text-left">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <BookHeart className="w-4 h-4 text-[#497C66] shrink-0" aria-hidden="true" />
-                <span className="text-xs font-bold text-[#4A3528] whitespace-nowrap">
-                  이번 산책 추억 조각{' '}
-                  <span className="font-mono-num text-[#C86D3B]">
-                    {summary.collectedMemoryIds.length}/{stageMemories.length}
+          {isEndless ? (
+            <div className="mt-3 flex items-center justify-center gap-2.5 text-xs text-[#745E4E]">
+              <span>
+                간식 <strong className="font-mono-num text-[#4A3528]">{summary.treatsCollected}개</strong>
+              </span>
+              <span className="text-[#D8CBB8]" aria-hidden="true">·</span>
+              <span>
+                최고 콤보 <strong className="font-mono-num text-[#C86D3B]">{summary.maxCombo}x</strong>
+              </span>
+              <span className="text-[#D8CBB8]" aria-hidden="true">·</span>
+              <span>
+                도달 구역 <strong className="font-mono-num text-[#3F6B58]">{summary.endlessZoneNumber}</strong>
+              </span>
+            </div>
+          ) : (
+            /* Collected Stage Memory Fragments Strip */
+            <div className="mt-3 rounded-[20px] bg-[#FAF4EB] border border-[#EDE2D2] px-3.5 py-2.5 text-left">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <BookHeart className="w-4 h-4 text-[#497C66] shrink-0" aria-hidden="true" />
+                  <span className="text-xs font-bold text-[#4A3528] whitespace-nowrap">
+                    이번 산책 추억 조각{' '}
+                    <span className="font-mono-num text-[#C86D3B]">
+                      {summary.collectedMemoryIds.length}/{stageMemories.length}
+                    </span>
                   </span>
-                </span>
-                {summary.memoryBonusTotal > 0 && (
-                  <span className="text-[11px] font-mono-num font-bold text-[#497C66] whitespace-nowrap">
-                    · +{summary.memoryBonusTotal}점
-                  </span>
-                )}
+                  {summary.memoryBonusTotal > 0 && (
+                    <span className="text-[11px] font-mono-num font-bold text-[#497C66] whitespace-nowrap">
+                      · +{summary.memoryBonusTotal}점
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={onOpenMemoryAlbum}
+                  className="text-xs font-bold text-[#3F6B58] hover:text-[#2D5040] whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  추억 앨범 →
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={onOpenMemoryAlbum}
-                className="text-xs font-bold text-[#3F6B58] hover:text-[#2D5040] whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                추억 앨범 →
-              </button>
-            </div>
-
-            <div className="mt-2 grid grid-cols-3 gap-1.5">
-              {stageMemories.map((frag) => {
-                const gotThisRun = summary.collectedMemoryIds.includes(frag.id);
-                const isNew = newlyDiscoveredMemoryIds.includes(frag.id);
-                return (
-                  <button
-                    key={frag.id}
-                    type="button"
-                    onClick={onOpenMemoryAlbum}
-                    className={`p-1.5 rounded-[14px] border text-center flex flex-col items-center justify-center transition-colors cursor-pointer ${
-                      gotThisRun
-                        ? 'bg-[#FFFDF9] border-[#E7D4B5]'
-                        : 'bg-[#F5EFE6]/70 border-[#EAE0D0]/70'
-                    }`}
-                  >
-                    <MemoryIcon id={frag.id} locked={!gotThisRun} size={34} />
-                    <span
-                      className={`mt-1 text-[10px] leading-tight truncate w-full ${
-                        gotThisRun ? 'font-bold text-[#4A3528]' : 'text-[#9B897A]'
+              <div className="mt-2 grid grid-cols-3 gap-1.5">
+                {stageMemories.map((frag) => {
+                  const gotThisRun = summary.collectedMemoryIds.includes(frag.id);
+                  const isNew = newlyDiscoveredMemoryIds.includes(frag.id);
+                  return (
+                    <button
+                      key={frag.id}
+                      type="button"
+                      onClick={onOpenMemoryAlbum}
+                      className={`p-1.5 rounded-[14px] border text-center flex flex-col items-center justify-center transition-colors cursor-pointer ${
+                        gotThisRun
+                          ? 'bg-[#FFFDF9] border-[#E7D4B5]'
+                          : 'bg-[#F5EFE6]/70 border-[#EAE0D0]/70'
                       }`}
                     >
-                      {gotThisRun ? frag.name : '미획득'}
-                    </span>
-                    {isNew && (
-                      <span className="text-[9px] font-bold text-[#C86D3B] leading-none mt-0.5">
-                        신규 기록
+                      <MemoryIcon id={frag.id} locked={!gotThisRun} size={34} />
+                      <span
+                        className={`mt-1 text-[10px] leading-tight truncate w-full ${
+                          gotThisRun ? 'font-bold text-[#4A3528]' : 'text-[#9B897A]'
+                        }`}
+                      >
+                        {gotThisRun ? frag.name : '미획득'}
                       </span>
-                    )}
-                  </button>
-                );
-              })}
+                      {isNew && (
+                        <span className="text-[9px] font-bold text-[#C86D3B] leading-none mt-0.5">
+                          신규 기록
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Online Ranking Card Strip */}
           <div className="mt-2.5 rounded-[20px] bg-[#FAF4EB] border border-[#EDE2D2] px-3.5 py-2.5 text-left">
@@ -540,7 +582,13 @@ export function GameOverOverlay({
                 className="flex-1 min-h-[50px] px-4 rounded-[20px] bg-[#D67844] hover:bg-[#C46936] active:scale-[0.98] text-[#FFFDF9] font-display text-lg flex items-center justify-center gap-2 shadow-[0_8px_22px_rgba(214,120,68,0.3)] transition-all whitespace-nowrap cursor-pointer"
               >
                 <RotateCcw className="w-4 h-4" strokeWidth={2.5} aria-hidden="true" />
-                <span>{isCompleted ? '한 번 더 산책하기' : '다시 산책하기'}</span>
+                <span>
+                  {isEndless
+                    ? '다시 무한 질주하기'
+                    : isCompleted
+                      ? '한 번 더 산책하기'
+                      : '다시 산책하기'}
+                </span>
               </button>
             </div>
           )}

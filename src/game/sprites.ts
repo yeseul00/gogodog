@@ -1,6 +1,6 @@
 import { CHARACTER_LIST } from './characters';
 import { STAGE_MAP } from './stages';
-import type { CharacterId, StageId } from './types';
+import type { CharacterId, VisualStageId } from './types';
 
 export interface ProcessedSprite {
   canvas: HTMLCanvasElement;
@@ -19,7 +19,7 @@ export interface CharacterSpriteSet {
 
 export interface GameSprites {
   characters: Record<CharacterId, CharacterSpriteSet>;
-  stagePanoramas: Record<StageId, HTMLCanvasElement | null>;
+  stagePanoramas: Record<VisualStageId, HTMLCanvasElement | null>;
   ready: boolean;
 }
 
@@ -274,7 +274,7 @@ async function loadCharacterSprites(
 
 export async function loadGameSprites(): Promise<GameSprites> {
   const result = createEmptyGameSprites();
-  const stageIds: StageId[] = [1, 2, 3];
+  const stageIds: VisualStageId[] = [1, 2, 3];
 
   const [characterSets, panoResults] = await Promise.all([
     Promise.all(

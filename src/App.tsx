@@ -40,10 +40,14 @@ import type {
 
 function createInitialHud(records: SavedRecords): HudSnapshot {
   const stage = getStageDefinition(records.selectedStage);
+  const initialVisualStage = getStageDefinition(stage.id === 4 ? 1 : stage.id);
   return {
     stageId: stage.id,
     stageStepLabel: stage.stepLabel,
     stageName: stage.name,
+    isEndless: stage.isEndless,
+    endlessZoneNumber: 1,
+    endlessZoneName: initialVisualStage.name,
     hearts: 3,
     maxHearts: 3,
     score: 0,
@@ -787,7 +791,7 @@ export default function App() {
             onRestart={() => void handleStartGame()}
             onStartNextStage={(nextId) => void handleStartNextStage(nextId)}
             onOpenLeaderboard={() => handleOpenLeaderboard(summary.stageId)}
-            onOpenMemoryAlbum={() => handleOpenMemoryAlbum(summary.stageId)}
+            onOpenMemoryAlbum={() => handleOpenMemoryAlbum(summary.isEndless ? 'all' : summary.stageId)}
             onRetrySubmit={handleRetrySubmit}
             onGoTitle={handleGoTitle}
           />

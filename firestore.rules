@@ -51,13 +51,13 @@ service cloud.firestore {
         && data.characterName.size() >= 1
         && data.characterName.size() <= 12
         && data.stageId is int
-        && (data.stageId == 1 || data.stageId == 2 || data.stageId == 3)
+        && (data.stageId == 1 || data.stageId == 2 || data.stageId == 3 || data.stageId == 4)
         && data.score is int
         && data.score >= 0
         && data.score <= 999999
         && data.distance is int
         && data.distance >= 0
-        && data.distance <= 1000
+        && data.distance <= 999999
         && data.outcome is string
         && data.outcome.size() <= 20
         && (data.outcome == 'completed' || data.outcome == 'early_return')
