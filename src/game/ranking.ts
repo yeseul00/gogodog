@@ -1,4 +1,3 @@
-import type { User } from 'firebase/auth';
 import {
   collection,
   doc,
@@ -60,19 +59,38 @@ function clampInt(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Math.floor(value)));
 }
 
-function makeSafeEntryId(uid: string): string {
-  const cleanUid = uid.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24) || 'player';
+const GUEST_PLAYER_ID_KEY = 'pome_walk_guest_id_v1';
+
+export function getOrCreateGuestPlayerId(): string {
+  const fallbackId = `guest_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  try {
+    const existing = window.localStorage.getItem(GUEST_PLAYER_ID_KEY);
+    if (existing && /^[a-zA-Z0-9_-]{6,64}$/.test(existing)) {
+      return existing;
+    }
+    const generated =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? `guest_${crypto.randomUUID().replace(/-/g, '').slice(0, 20)}`
+        : fallbackId;
+    window.localStorage.setItem(GUEST_PLAYER_ID_KEY, generated);
+    return generated;
+  } catch {
+    return fallbackId;
+  }
+}
+
+function makeSafeEntryId(playerId: string): string {
+  const cleanUid = playerId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24) || 'guest';
   const rand = Math.floor(Math.random() * 100000);
   return `${cleanUid}_${Date.now()}_${rand}`;
 }
 
 /**
  * Allocates the next sequential default character name (땡콩1, 땡콩2 / 나리1, 나리2 / 키키1, 키키2).
- * Uses an atomic Firestore transaction on counters/defaultName, counters/defaultName_nari, or counters/defaultName_kiki when signed in,
- * and falls back gracefully to a local per-character sequential number when offline or signed out.
+ * Uses an atomic Firestore transaction on counters/defaultName, counters/defaultName_nari, or counters/defaultName_kiki
+ * without requiring account sign-in, and falls back gracefully to a local per-character number when offline.
  */
 export async function allocateDefaultCharacterName(
-  user: User | null,
   localNextNumber: number,
   characterId: CharacterId = DEFAULT_CHARACTER_ID
 ): Promise<{ name: string; nextLocalNumber: number; isServerAssigned: boolean }> {
@@ -81,40 +99,39 @@ export async function allocateDefaultCharacterName(
   const counterDocId = charDef.counterDocId;
   const safeLocal = Math.max(1, Math.floor(localNextNumber || 1));
 
-  if (user && user.emailVerified) {
-    const counterPath = `counters/${counterDocId}`;
-    try {
-      const assignedNum = await runTransaction(db, async (tx) => {
-        const ref = doc(db, 'counters', counterDocId);
-        const snap = await tx.get(ref);
-        if (!snap.exists()) {
-          tx.set(ref, {
-            count: 1,
-            updatedAt: serverTimestamp(),
-          });
-          return 1;
-        }
-        const currentRaw = snap.data()?.count;
-        const current = typeof currentRaw === 'number' && Number.isFinite(currentRaw) ? Math.floor(currentRaw) : 0;
-        const next = Math.min(10000000, Math.max(1, current + 1));
-        tx.update(ref, {
-          count: next,
+  const counterPath = `counters/${counterDocId}`;
+  try {
+    const assignedNum = await runTransaction(db, async (tx) => {
+      const ref = doc(db, 'counters', counterDocId);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) {
+        tx.set(ref, {
+          count: 1,
           updatedAt: serverTimestamp(),
         });
-        return next;
-      });
-
-      return {
-        name: `${prefix}${assignedNum}`,
-        nextLocalNumber: Math.max(safeLocal, assignedNum + 1),
-        isServerAssigned: true,
-      };
-    } catch (error) {
-      try {
-        handleFirestoreError(error, OperationType.WRITE, counterPath);
-      } catch {
-        // Gracefully fall back to local counter so player can always start walking immediately
+        return 1;
       }
+      const currentRaw = snap.data()?.count;
+      const current =
+        typeof currentRaw === 'number' && Number.isFinite(currentRaw) ? Math.floor(currentRaw) : 0;
+      const next = Math.min(10000000, Math.max(1, current + 1));
+      tx.update(ref, {
+        count: next,
+        updatedAt: serverTimestamp(),
+      });
+      return next;
+    });
+
+    return {
+      name: `${prefix}${assignedNum}`,
+      nextLocalNumber: Math.max(safeLocal, assignedNum + 1),
+      isServerAssigned: true,
+    };
+  } catch (error) {
+    try {
+      handleFirestoreError(error, OperationType.WRITE, counterPath);
+    } catch {
+      // Gracefully fall back to local counter so player can always start walking immediately
     }
   }
 
@@ -179,10 +196,9 @@ export function subscribePublicRankings(
 }
 
 /**
- * Submits an immutable run record to Firestore under strict blueprint constraints.
+ * Submits an immutable run record to Firestore under strict blueprint constraints without requiring login.
  */
 export async function submitRankingEntry(
-  user: User,
   characterName: string,
   summary: GameSummary
 ): Promise<string> {
@@ -191,11 +207,12 @@ export async function submitRankingEntry(
     throw new Error('캐릭터 이름이 비어 있습니다.');
   }
 
-  const entryId = makeSafeEntryId(user.uid);
+  const playerId = getOrCreateGuestPlayerId();
+  const entryId = makeSafeEntryId(playerId);
   const path = `rankings/${entryId}`;
 
   const payload = {
-    userId: user.uid,
+    userId: playerId,
     characterName: safeName,
     stageId: summary.stageId,
     score: clampInt(summary.score, 0, 999999),

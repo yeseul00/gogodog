@@ -20,15 +20,7 @@ service cloud.firestore {
       return resource.data;
     }
 
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isVerifiedUser() {
-      return isSignedIn() && request.auth.token.email_verified == true;
-    }
-
-    // Validation Blueprint: Public RankingEntry (strict keys, bounds, zero PII)
+    // Validation Blueprint: Public RankingEntry (strict keys, bounds, zero PII, guest-accessible)
     function isValidRankingEntry(data) {
       return data.keys().hasAll([
           'userId',
@@ -55,7 +47,6 @@ service cloud.firestore {
           'createdAt'
         ])
         && isValidId(data.userId)
-        && data.userId == request.auth.uid
         && data.characterName is string
         && data.characterName.size() >= 1
         && data.characterName.size() <= 12
@@ -81,7 +72,7 @@ service cloud.firestore {
         && data.createdAt is timestamp;
     }
 
-    // Validation Blueprint: Monotonic NameCounter (땡콩1, 땡콩2, ...)
+    // Validation Blueprint: Monotonic NameCounter (땡콩1, 나리1, 키키1, ...)
     function isValidNameCounter(data) {
       return data.keys().hasAll(['count', 'updatedAt'])
         && data.keys().hasOnly(['count', 'updatedAt'])
@@ -91,36 +82,33 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
-    // Public online leaderboard collection (non-PII, immutable once created)
-    match /rankings/{entryId} {
-      allow get: if isValidId(entryId) && existing().isPublic == true;
-      allow list: if existing().isPublic == true;
-      allow create: if isVerifiedUser()
-        && isValidId(entryId)
-        && isValidRankingEntry(incoming())
-        && incoming().createdAt == request.time;
-      allow update: if false;
-      allow delete: if false;
-    }
-
     function isAllowedCounterId(counterId) {
       return counterId == 'defaultName'
         || counterId == 'defaultName_nari'
         || counterId == 'defaultName_kiki';
     }
 
+    // Public online leaderboard collection (non-PII, login-free create, immutable once created)
+    match /rankings/{entryId} {
+      allow get: if isValidId(entryId) && existing().isPublic == true;
+      allow list: if existing().isPublic == true;
+      allow create: if isValidId(entryId)
+        && isValidRankingEntry(incoming())
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if false;
+    }
+
     // Sequential default name counters (counters/defaultName, counters/defaultName_nari, counters/defaultName_kiki; strictly +1 increments)
     match /counters/{counterId} {
-      allow get: if isVerifiedUser() && isValidId(counterId) && isAllowedCounterId(counterId);
+      allow get: if isValidId(counterId) && isAllowedCounterId(counterId);
       allow list: if false;
-      allow create: if isVerifiedUser()
-        && isValidId(counterId)
+      allow create: if isValidId(counterId)
         && isAllowedCounterId(counterId)
         && isValidNameCounter(incoming())
         && incoming().count == 1
         && incoming().updatedAt == request.time;
-      allow update: if isVerifiedUser()
-        && isValidId(counterId)
+      allow update: if isValidId(counterId)
         && isAllowedCounterId(counterId)
         && isValidNameCounter(incoming())
         && incoming().diff(existing()).affectedKeys().hasOnly(['count', 'updatedAt'])

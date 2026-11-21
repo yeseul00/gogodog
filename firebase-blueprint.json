@@ -7,7 +7,7 @@
       "properties": {
         "userId": {
           "type": "string",
-          "description": "Firebase Auth UID of the authenticated player who submitted the record.",
+          "description": "Locally generated anonymous guest player ID (no account login required) or Firebase UID.",
           "minLength": 1,
           "maxLength": 128,
           "pattern": "^[a-zA-Z0-9_\\-]+$"

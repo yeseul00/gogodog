@@ -1,4 +1,4 @@
-import { ArrowRight, BookHeart, Home, LogIn, RotateCcw, Sparkles, Trophy } from 'lucide-react';
+import { ArrowRight, BookHeart, Home, RotateCcw, Sparkles, Trophy } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { getCharacterDefinition } from '../game/characters';
 import { getStageMemories } from '../game/memories';
@@ -7,7 +7,7 @@ import { getNextStageId, getStageDefinition } from '../game/stages';
 import type { CharacterId, GameSummary, MemoryFragmentId, StageId } from '../game/types';
 import { MemoryIcon } from './MemoryIcon';
 
-export type RankingSubmitStatus = 'idle' | 'submitting' | 'submitted' | 'needs_auth' | 'error';
+export type RankingSubmitStatus = 'idle' | 'submitting' | 'submitted' | 'error';
 
 interface GameOverOverlayProps {
   summary: GameSummary;
@@ -17,13 +17,11 @@ interface GameOverOverlayProps {
   newlyDiscoveredMemoryIds: MemoryFragmentId[];
   rankSnapshot: PlayerRankSnapshot;
   rankingStatus: RankingSubmitStatus;
-  authBusy: boolean;
   compactLandscape?: boolean;
   onRestart: () => void;
   onStartNextStage: (nextStageId: StageId) => void;
   onOpenLeaderboard: () => void;
   onOpenMemoryAlbum: () => void;
-  onSignInAndSubmit: () => void;
   onRetrySubmit: () => void;
   onGoTitle: () => void;
 }
@@ -36,13 +34,11 @@ export function GameOverOverlay({
   newlyDiscoveredMemoryIds,
   rankSnapshot,
   rankingStatus,
-  authBusy,
   compactLandscape = false,
   onRestart,
   onStartNextStage,
   onOpenLeaderboard,
   onOpenMemoryAlbum,
-  onSignInAndSubmit,
   onRetrySubmit,
   onGoTitle,
 }: GameOverOverlayProps) {
@@ -145,22 +141,11 @@ export function GameOverOverlay({
               {rankingStatus === 'submitting' && (
                 <span className="text-[#847060]">온라인 랭킹 등록 중...</span>
               )}
-              {rankingStatus === 'submitted' && rankHeadline && (
+              {rankingStatus === 'submitted' && (
                 <span className="inline-flex items-center gap-1 text-[#B85B2A]">
                   <Trophy className="w-3 h-3" aria-hidden="true" />
-                  <span>{rankHeadline}</span>
+                  <span>{rankHeadline ?? '온라인 랭킹 등록 완료!'}</span>
                 </span>
-              )}
-              {rankingStatus === 'needs_auth' && (
-                <button
-                  type="button"
-                  disabled={authBusy}
-                  onClick={onSignInAndSubmit}
-                  className="inline-flex items-center gap-1 text-[#C86D3B] underline underline-offset-2 cursor-pointer"
-                >
-                  <LogIn className="w-3 h-3" aria-hidden="true" />
-                  <span>{authBusy ? '로그인 중...' : 'Google 로그인하고 랭킹 등록'}</span>
-                </button>
               )}
               {rankingStatus === 'error' && (
                 <button
@@ -451,13 +436,11 @@ export function GameOverOverlay({
                 <span className="text-xs font-bold text-[#4A3528] truncate">
                   {rankingStatus === 'submitting'
                     ? '온라인 랭킹 등록 중...'
-                    : rankingStatus === 'submitted' && rankHeadline
-                      ? rankHeadline
-                      : rankingStatus === 'needs_auth'
-                        ? '온라인 랭킹에 점수를 남겨보세요'
-                        : rankingStatus === 'error'
-                          ? '랭킹 등록에 실패했어요'
-                          : `${summary.stageStepLabel} 상위 랭킹`}
+                    : rankingStatus === 'submitted'
+                      ? (rankHeadline ?? '온라인 랭킹에 등록되었어요!')
+                      : rankingStatus === 'error'
+                        ? '랭킹 등록에 실패했어요'
+                        : `${summary.stageStepLabel} 상위 랭킹`}
                 </span>
               </div>
 
@@ -469,18 +452,6 @@ export function GameOverOverlay({
                 전체 랭킹 →
               </button>
             </div>
-
-            {rankingStatus === 'needs_auth' && (
-              <button
-                type="button"
-                disabled={authBusy}
-                onClick={onSignInAndSubmit}
-                className="mt-2 w-full min-h-[40px] rounded-xl bg-[#FFFDF9] hover:bg-[#FCECE0] border border-[#E6D5C0] text-[#B85B2A] text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60"
-              >
-                <LogIn className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>{authBusy ? 'Google 로그인 중...' : 'Google 로그인하고 내 기록 등록하기'}</span>
-              </button>
-            )}
 
             {rankingStatus === 'error' && (
               <button

@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, BookHeart, Lock, LogIn, PawPrint, Play, Trophy, User } from 'lucide-react';
+import { ArrowDown, ArrowUp, BookHeart, Lock, PawPrint, Play, Trophy, User } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { getCharacterDefinition } from '../game/characters';
 import { MAX_CHARACTER_NAME_LENGTH } from '../game/ranking';
@@ -13,8 +13,6 @@ interface TitleOverlayProps {
   characterName: string;
   collectedMemoryCount: number;
   totalMemoryCount: number;
-  isSignedIn: boolean;
-  authBusy: boolean;
   starting: boolean;
   compactLandscape?: boolean;
   onChangeCharacterName: (name: string) => void;
@@ -22,7 +20,6 @@ interface TitleOverlayProps {
   onOpenCharacterSelect: () => void;
   onOpenLeaderboard: () => void;
   onOpenMemoryAlbum: () => void;
-  onSignIn: () => void;
   onStart: () => void;
 }
 
@@ -34,8 +31,6 @@ export function TitleOverlay({
   characterName,
   collectedMemoryCount,
   totalMemoryCount,
-  isSignedIn,
-  authBusy,
   starting,
   compactLandscape = false,
   onChangeCharacterName,
@@ -43,7 +38,6 @@ export function TitleOverlay({
   onOpenCharacterSelect,
   onOpenLeaderboard,
   onOpenMemoryAlbum,
-  onSignIn,
   onStart,
 }: TitleOverlayProps) {
   const [imgFailed, setImgFailed] = useState(false);
@@ -151,23 +145,11 @@ export function TitleOverlay({
                   type="button"
                   onClick={onOpenLeaderboard}
                   aria-label="온라인 랭킹 보기"
-                  className="min-h-[40px] px-2 rounded-xl bg-[#FCECE0] hover:bg-[#F7DEC9] text-[#B85B2A] text-[11px] font-bold flex items-center gap-1 whitespace-nowrap cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C86D3B]"
+                  className="min-h-[40px] px-2.5 rounded-xl bg-[#FCECE0] hover:bg-[#F7DEC9] text-[#B85B2A] text-[11px] font-bold flex items-center gap-1 whitespace-nowrap cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C86D3B]"
                 >
                   <Trophy className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>랭킹</span>
                 </button>
-                {!isSignedIn && (
-                  <button
-                    type="button"
-                    disabled={authBusy}
-                    onClick={onSignIn}
-                    aria-label="Google 로그인"
-                    className="min-h-[40px] px-2 rounded-xl bg-[#F3ECE0] hover:bg-[#EAE0D0] text-[#6E594A] text-[11px] font-bold flex items-center gap-1 whitespace-nowrap cursor-pointer"
-                  >
-                    <LogIn className="w-3.5 h-3.5" aria-hidden="true" />
-                    <span>{authBusy ? '...' : '로그인'}</span>
-                  </button>
-                )}
               </div>
             </div>
 
@@ -290,27 +272,14 @@ export function TitleOverlay({
               </span>
             </button>
 
-            <div className="flex items-center gap-1.5">
-              {!isSignedIn && (
-                <button
-                  type="button"
-                  disabled={authBusy}
-                  onClick={onSignIn}
-                  className="min-h-[40px] px-2.5 rounded-2xl bg-[#FFFDF9]/90 hover:bg-[#FFFDF9] backdrop-blur-md border border-white/90 shadow-sm text-[#5C4638] text-xs font-bold flex items-center gap-1 whitespace-nowrap cursor-pointer"
-                >
-                  <LogIn className="w-3.5 h-3.5" aria-hidden="true" />
-                  <span>{authBusy ? '연결 중' : '로그인'}</span>
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={onOpenLeaderboard}
-                className="min-h-[40px] px-3 rounded-2xl bg-[#FFFDF9]/92 hover:bg-[#FFFDF9] backdrop-blur-md border border-white/90 shadow-sm text-[#B85B2A] text-xs font-bold flex items-center gap-1.5 whitespace-nowrap cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C86D3B]"
-              >
-                <Trophy className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>랭킹 보기</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={onOpenLeaderboard}
+              className="min-h-[40px] px-3 rounded-2xl bg-[#FFFDF9]/92 hover:bg-[#FFFDF9] backdrop-blur-md border border-white/90 shadow-sm text-[#B85B2A] text-xs font-bold flex items-center gap-1.5 whitespace-nowrap cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C86D3B]"
+            >
+              <Trophy className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>랭킹 보기</span>
+            </button>
           </div>
 
           <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-[#FFFDF9] via-[#FFFDF9]/60 to-transparent" />
@@ -477,7 +446,7 @@ export function TitleOverlay({
           </button>
 
           <p className="mt-2 text-[11px] text-[#8C7868]">
-            산책 완주 시 다음 단계 해금 · 종료 후 온라인 랭킹 반영
+            로그인 없이 캐릭터 이름으로 온라인 랭킹 자동 등록
           </p>
         </div>
       </div>

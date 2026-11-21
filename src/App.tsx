@@ -1,12 +1,3 @@
-import {
-  getRedirectResult,
-  onAuthStateChanged,
-  signInWithPopup,
-  signInWithRedirect,
-  signOut,
-  type User,
-} from 'firebase/auth';
-import { X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CharacterSelectModal } from './components/CharacterSelectModal';
 import { GameOverOverlay, type RankingSubmitStatus } from './components/GameOverOverlay';
@@ -16,7 +7,6 @@ import { PauseOverlay } from './components/PauseOverlay';
 import { TitleOverlay } from './components/TitleOverlay';
 import { TopHud } from './components/TopHud';
 import { TouchControls } from './components/TouchControls';
-import { auth, googleProvider } from './firebase';
 import { SoundEngine } from './game/audio';
 import { getCharacterDefinition } from './game/characters';
 import { PomeWalkEngine } from './game/engine';
@@ -74,40 +64,9 @@ function createInitialHud(records: SavedRecords): HudSnapshot {
   };
 }
 
-const PENDING_RANK_SUBMISSION_KEY = 'pome_walk_pending_rank_v1';
-
 function readViewportSize(): { width: number; height: number } {
   if (typeof window === 'undefined') return { width: 1024, height: 640 };
   return { width: window.innerWidth, height: window.innerHeight };
-}
-
-function isEmbeddedInAppBrowser(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  const ua = navigator.userAgent || '';
-  return /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\/|wv\)/i.test(ua);
-}
-
-function formatAuthErrorMessage(error: unknown): string | null {
-  const code =
-    typeof error === 'object' && error !== null && 'code' in error
-      ? String((error as { code?: unknown }).code)
-      : '';
-  if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
-    return null;
-  }
-  if (code === 'auth/unauthorized-domain') {
-    const host = typeof window !== 'undefined' ? window.location.hostname : '';
-    return `현재 도메인(${host})이 Firebase 승인 도메인에 등록되지 않았어요. Firebase 콘솔 > Authentication > 설정 > 승인된 도메인에 추가해 주세요.`;
-  }
-  if (code === 'auth/network-request-failed') {
-    return '네트워크 연결을 확인한 뒤 다시 로그인해 주세요.';
-  }
-  if (isEmbeddedInAppBrowser()) {
-    return '인앱 브라우저(카카오톡 등)에서는 Google 로그인이 차단될 수 있어요. Safari 또는 Chrome으로 열어 주세요.';
-  }
-  return code
-    ? `Google 로그인을 완료하지 못했어요. (${code})`
-    : 'Google 로그인을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.';
 }
 
 export default function App() {
@@ -135,10 +94,7 @@ export default function App() {
     readViewportSize()
   );
 
-  // Online Firebase Auth & Leaderboard State
-  const [authUser, setAuthUser] = useState<User | null>(null);
-  const [authBusy, setAuthBusy] = useState<boolean>(false);
-  const [authNotice, setAuthNotice] = useState<string | null>(null);
+  // Online Leaderboard State (login-free)
   const [rankings, setRankings] = useState<RankingEntry[]>([]);
   const [rankingsLoading, setRankingsLoading] = useState<boolean>(true);
   const [rankingsError, setRankingsError] = useState<string | null>(null);
@@ -159,7 +115,6 @@ export default function App() {
   const gameStateRef = useRef<GameState>(gameState);
   const unlockedStageRef = useRef<StageId>(unlockedStage);
   const selectedCharacterRef = useRef<CharacterId>(selectedCharacter);
-  const authUserRef = useRef<User | null>(authUser);
   const activeRunNameRef = useRef<string>(activeRunName);
   const usedLocalFallbackNameRef = useRef<boolean>(false);
   const recordsRef = useRef<SavedRecords>(records);
@@ -190,25 +145,12 @@ export default function App() {
   }, [selectedCharacter]);
 
   useEffect(() => {
-    authUserRef.current = authUser;
-  }, [authUser]);
-
-  useEffect(() => {
     activeRunNameRef.current = activeRunName;
   }, [activeRunName]);
 
   useEffect(() => {
     recordsRef.current = records;
   }, [records]);
-
-  // Subscribe to Firebase Auth state
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setAuthUser(user);
-      authUserRef.current = user;
-    });
-    return () => unsubscribe();
-  }, []);
 
   // Subscribe to public online Firestore rankings
   useEffect(() => {
@@ -248,17 +190,16 @@ export default function App() {
   }, [viewport.width, viewport.height, activeVirtualLandscape]);
 
   const submitScoreToOnlineBoard = useCallback(
-    async (user: User, runName: string, runSummary: GameSummary) => {
+    async (runName: string, runSummary: GameSummary) => {
       setRankingSubmitStatus('submitting');
       try {
         let finalName = sanitizeCharacterName(runName);
         const charId = selectedCharacterRef.current;
-        // If a default name was assigned locally before login, allocate a server-sequential default name now!
         if (!finalName || usedLocalFallbackNameRef.current) {
           const localSeq = recordsRef.current.localDefaultCounters?.[charId] ?? 1;
-          const allocated = await allocateDefaultCharacterName(user, localSeq, charId);
+          const allocated = await allocateDefaultCharacterName(localSeq, charId);
           finalName = allocated.name;
-          usedLocalFallbackNameRef.current = false;
+          usedLocalFallbackNameRef.current = !allocated.isServerAssigned;
           setCharacterNameInput(finalName);
           setActiveRunName(finalName);
           activeRunNameRef.current = finalName;
@@ -277,7 +218,7 @@ export default function App() {
             return updated;
           });
         }
-        await submitRankingEntry(user, finalName, runSummary);
+        await submitRankingEntry(finalName, runSummary);
         setRankingSubmitStatus('submitted');
       } catch {
         setRankingSubmitStatus('error');
@@ -349,12 +290,7 @@ export default function App() {
             return updated;
           });
 
-          const currentUser = authUserRef.current;
-          if (currentUser && currentUser.emailVerified) {
-            void submitScoreToOnlineBoard(currentUser, activeRunNameRef.current, runSummary);
-          } else {
-            setRankingSubmitStatus('needs_auth');
-          }
+          void submitScoreToOnlineBoard(activeRunNameRef.current, runSummary);
         },
       },
       initial.bestScore,
@@ -389,44 +325,6 @@ export default function App() {
     };
   }, [submitScoreToOnlineBoard]);
 
-  // Handle mobile redirect sign-in return (when popup was blocked by mobile browser)
-  useEffect(() => {
-    let active = true;
-    void getRedirectResult(auth)
-      .then(async (cred) => {
-        if (!active || !cred?.user) return;
-        setAuthUser(cred.user);
-        authUserRef.current = cred.user;
-        try {
-          const rawPending = window.sessionStorage.getItem(PENDING_RANK_SUBMISSION_KEY);
-          if (rawPending) {
-            window.sessionStorage.removeItem(PENDING_RANK_SUBMISSION_KEY);
-            const pending = JSON.parse(rawPending) as {
-              runName: string;
-              runSummary: GameSummary;
-            };
-            if (cred.user.emailVerified && pending?.runSummary) {
-              setActiveRunName(pending.runName);
-              activeRunNameRef.current = pending.runName;
-              setSummary(pending.runSummary);
-              setGameState('GAME_OVER');
-              await submitScoreToOnlineBoard(cred.user, pending.runName, pending.runSummary);
-            }
-          }
-        } catch {
-          // Ignore malformed pending submission
-        }
-      })
-      .catch((error) => {
-        if (!active) return;
-        const msg = formatAuthErrorMessage(error);
-        if (msg) setAuthNotice(msg);
-      });
-    return () => {
-      active = false;
-    };
-  }, [submitScoreToOnlineBoard]);
-
   const handleChangeCharacterName = useCallback((raw: string) => {
     const sliced = raw.slice(0, MAX_CHARACTER_NAME_LENGTH);
     setCharacterNameInput(sliced);
@@ -450,11 +348,7 @@ export default function App() {
 
     const charId = selectedCharacterRef.current;
     const localSeq = recordsRef.current.localDefaultCounters?.[charId] ?? 1;
-    const allocated = await allocateDefaultCharacterName(
-      authUserRef.current,
-      localSeq,
-      charId
-    );
+    const allocated = await allocateDefaultCharacterName(localSeq, charId);
     usedLocalFallbackNameRef.current = !allocated.isServerAssigned;
     setCharacterNameInput(allocated.name);
     setActiveRunName(allocated.name);
@@ -476,89 +370,9 @@ export default function App() {
     return allocated.name;
   }, [characterNameInput]);
 
-  const handleSignIn = useCallback(
-    async (pendingRun?: { runName: string; runSummary: GameSummary }): Promise<User | null> => {
-      soundRef.current?.unlock();
-      soundRef.current?.playClick();
-      setAuthNotice(null);
-
-      if (isEmbeddedInAppBrowser()) {
-        setAuthNotice(
-          '카카오톡·인스타 등 인앱 브라우저에서는 Google 로그인이 차단될 수 있어요. Safari 또는 Chrome에서 열어 주세요.'
-        );
-      }
-
-      setAuthBusy(true);
-      try {
-        const cred = await signInWithPopup(auth, googleProvider);
-        setAuthUser(cred.user);
-        authUserRef.current = cred.user;
-        setAuthNotice(null);
-        return cred.user;
-      } catch (error) {
-        const code =
-          typeof error === 'object' && error !== null && 'code' in error
-            ? String((error as { code?: unknown }).code)
-            : '';
-
-        // Graceful redirect fallback when a mobile browser blocks OAuth popups
-        if (
-          code === 'auth/popup-blocked' ||
-          code === 'auth/operation-not-supported-in-this-environment'
-        ) {
-          try {
-            if (pendingRun) {
-              window.sessionStorage.setItem(
-                PENDING_RANK_SUBMISSION_KEY,
-                JSON.stringify(pendingRun)
-              );
-            }
-            await signInWithRedirect(auth, googleProvider);
-            return null;
-          } catch (redirectErr) {
-            const msg = formatAuthErrorMessage(redirectErr);
-            if (msg) setAuthNotice(msg);
-            return null;
-          }
-        }
-
-        console.error('Google Sign-In failed:', error);
-        const msg = formatAuthErrorMessage(error);
-        if (msg) setAuthNotice(msg);
-        return null;
-      } finally {
-        setAuthBusy(false);
-      }
-    },
-    []
-  );
-
-  const handleSignOut = useCallback(async () => {
-    soundRef.current?.playClick();
-    setAuthBusy(true);
-    try {
-      await signOut(auth);
-      setAuthUser(null);
-      authUserRef.current = null;
-    } finally {
-      setAuthBusy(false);
-    }
-  }, []);
-
-  const handleSignInAndSubmit = useCallback(async () => {
-    const pending = summary
-      ? { runName: activeRunNameRef.current, runSummary: summary }
-      : undefined;
-    const signedInUser = await handleSignIn(pending);
-    if (signedInUser && signedInUser.emailVerified && summary) {
-      await submitScoreToOnlineBoard(signedInUser, activeRunNameRef.current, summary);
-    }
-  }, [handleSignIn, submitScoreToOnlineBoard, summary]);
-
   const handleRetrySubmit = useCallback(() => {
-    const currentUser = authUserRef.current;
-    if (currentUser && currentUser.emailVerified && summary) {
-      void submitScoreToOnlineBoard(currentUser, activeRunNameRef.current, summary);
+    if (summary) {
+      void submitScoreToOnlineBoard(activeRunNameRef.current, summary);
     }
   }, [submitScoreToOnlineBoard, summary]);
 
@@ -938,8 +752,6 @@ export default function App() {
             characterName={characterNameInput}
             collectedMemoryCount={totalCollectedMemories}
             totalMemoryCount={TOTAL_MEMORY_COUNT}
-            isSignedIn={Boolean(authUser)}
-            authBusy={authBusy}
             starting={startingRun}
             compactLandscape={isCompactLandscape}
             onChangeCharacterName={handleChangeCharacterName}
@@ -947,7 +759,6 @@ export default function App() {
             onOpenCharacterSelect={handleOpenCharacterSelect}
             onOpenLeaderboard={() => handleOpenLeaderboard('all')}
             onOpenMemoryAlbum={() => handleOpenMemoryAlbum('all')}
-            onSignIn={() => void handleSignIn()}
             onStart={() => void handleStartGame()}
           />
         )}
@@ -972,13 +783,11 @@ export default function App() {
             newlyDiscoveredMemoryIds={newlyDiscoveredMemoryIds}
             rankSnapshot={rankSnapshot}
             rankingStatus={rankingSubmitStatus}
-            authBusy={authBusy}
             compactLandscape={isCompactLandscape}
             onRestart={() => void handleStartGame()}
             onStartNextStage={(nextId) => void handleStartNextStage(nextId)}
             onOpenLeaderboard={() => handleOpenLeaderboard(summary.stageId)}
             onOpenMemoryAlbum={() => handleOpenMemoryAlbum(summary.stageId)}
-            onSignInAndSubmit={() => void handleSignInAndSubmit()}
             onRetrySubmit={handleRetrySubmit}
             onGoTitle={handleGoTitle}
           />
@@ -992,12 +801,8 @@ export default function App() {
           loading={rankingsLoading}
           error={rankingsError}
           currentCharacterName={activeRunName || characterNameInput}
-          isSignedIn={Boolean(authUser)}
-          authBusy={authBusy}
           compactLandscape={isCompactLandscape}
           onChangeTab={setLeaderboardTab}
-          onSignIn={() => void handleSignIn()}
-          onSignOut={() => void handleSignOut()}
           onClose={() => setLeaderboardOpen(false)}
         />
 
@@ -1020,26 +825,6 @@ export default function App() {
           onSelect={handleSelectCharacter}
           onClose={() => setCharacterModalOpen(false)}
         />
-
-        {/* Dismissible Auth Notice Toast */}
-        {authNotice && (
-          <div
-            role="alert"
-            className="absolute top-3 inset-x-3 z-40 flex justify-center pointer-events-none"
-          >
-            <div className="pointer-events-auto max-w-md flex items-center gap-2.5 rounded-2xl bg-[#FFFDF9]/98 border border-[#E8C5C0] shadow-[0_12px_30px_rgba(62,44,30,0.22)] px-4 py-2.5 text-left">
-              <p className="text-xs text-[#8C3B34] leading-snug flex-1">{authNotice}</p>
-              <button
-                type="button"
-                onClick={() => setAuthNotice(null)}
-                aria-label="안내 닫기"
-                className="min-h-[36px] min-w-[36px] flex items-center justify-center rounded-xl bg-[#F8ECEA] hover:bg-[#F2DFDC] text-[#8C3B34] shrink-0 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -173,10 +173,10 @@ export const CHARACTER_LIST: CharacterDefinition[] = [
     },
     spriteUrls: {
       runFrames: [
-        '/src/assets/images/kiki_run_ext.png',
-        '/src/assets/images/kiki_run_mid.png',
-        '/src/assets/images/kiki_run_trot.png',
-        '/src/assets/images/kiki_run_mid.png',
+        '/src/assets/images/kiki_warm_run_push_1795281458483.jpg',
+        '/src/assets/images/kiki_warm_run_land_1795281459398.jpg',
+        '/src/assets/images/kiki_warm_run_tuck_1795281525473.jpg',
+        '/src/assets/images/kiki_warm_run_stride_1795281525765.jpg',
       ],
       jump: '/src/assets/images/kiki_jump_up_1795278092785.jpg',
       duck: '/src/assets/images/kiki_duck.png',

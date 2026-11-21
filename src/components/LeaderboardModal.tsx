@@ -1,4 +1,4 @@
-import { Award, LogIn, LogOut, Trophy, X } from 'lucide-react';
+import { Award, Trophy, X } from 'lucide-react';
 import { useMemo } from 'react';
 import {
   buildLeaderboard,
@@ -15,12 +15,8 @@ interface LeaderboardModalProps {
   loading: boolean;
   error: string | null;
   currentCharacterName: string;
-  isSignedIn: boolean;
-  authBusy: boolean;
   compactLandscape?: boolean;
   onChangeTab: (tab: RankingTab) => void;
-  onSignIn: () => void;
-  onSignOut: () => void;
   onClose: () => void;
 }
 
@@ -31,12 +27,8 @@ export function LeaderboardModal({
   loading,
   error,
   currentCharacterName,
-  isSignedIn,
-  authBusy,
   compactLandscape = false,
   onChangeTab,
-  onSignIn,
-  onSignOut,
   onClose,
 }: LeaderboardModalProps) {
   const rows = useMemo(() => buildLeaderboard(entries, activeTab), [entries, activeTab]);
@@ -217,42 +209,19 @@ export function LeaderboardModal({
           )}
         </div>
 
-        {/* Footer: Account status for ranking registration */}
+        {/* Footer: Login-free ranking registration info */}
         <div
           className={`border-t border-[#EFE6D8] bg-[#FAF5EC]/80 shrink-0 flex items-center justify-between gap-2 ${
             compactLandscape ? 'px-4 py-2' : 'px-5 py-3'
           }`}
         >
-          {isSignedIn ? (
-            <>
-              <span className="text-[11px] text-[#6E594A] truncate">
-                Google 로그인 연결됨 · 산책 종료 시 자동 등록
-              </span>
-              <button
-                type="button"
-                disabled={authBusy}
-                onClick={onSignOut}
-                className="min-h-[40px] px-3 rounded-xl text-xs font-bold text-[#7A6555] hover:text-[#4A3528] hover:bg-[#EFE6D8] flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>로그아웃</span>
-              </button>
-            </>
-          ) : (
-            <>
-              <span className="text-[11px] text-[#745E4E] truncate">
-                내 점수를 온라인 랭킹에 올리려면 로그인해 주세요.
-              </span>
-              <button
-                type="button"
-                disabled={authBusy}
-                onClick={onSignIn}
-                className="min-h-[40px] px-3 rounded-xl bg-[#D67844] hover:bg-[#C46936] text-[#FFFDF9] text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 shadow-sm cursor-pointer disabled:opacity-60"
-              >
-                <LogIn className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>{authBusy ? '연결 중...' : 'Google 로그인'}</span>
-              </button>
-            </>
+          <span className="text-[11px] text-[#6E594A] truncate">
+            로그인 없이 캐릭터 이름으로 산책 종료 시 자동 등록돼요
+          </span>
+          {normalizedCurrent && (
+            <span className="text-[11px] font-bold text-[#C86D3B] whitespace-nowrap shrink-0">
+              내 이름: {sanitizeCharacterName(currentCharacterName)}
+            </span>
           )}
         </div>
       </div>
